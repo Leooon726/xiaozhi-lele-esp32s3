@@ -5,15 +5,34 @@
 #include <esp_system.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <algorithm>
+#include <cstdio>
 #include "application.h"
+#include "backlight.h"
+#include "display.h"
+#include "lvgl_theme.h"
 #include "music_storage.h"
+#include "settings.h"
 #include "usb_transfer.h"
 
 LV_FONT_DECLARE(BUILTIN_TEXT_FONT);
 
+void LeleMenu::Configure(Display* display, Backlight* backlight) {
+    display_ = display;
+    backlight_ = backlight;
+}
+
+bool LeleMenu::IsDark() const {
+    auto* theme = display_ ? display_->GetTheme() : nullptr;
+    return theme && theme->name() == "dark";
+}
+
 void LeleMenu::AddButton(const char* label, Action action, unsigned slot) {
     auto* button = lv_button_create(overlay_);
-    lv_obj_set_size(button, lv_pct(100), 42);
+    lv_obj_set_size(button, lv_pct(100), 32);
+    lv_obj_set_style_pad_all(button, 0, 0);
+    lv_obj_set_style_bg_color(button, lv_color_hex(IsDark() ? 0x303030 : 0xDDDDDD), 0);
+    lv_obj_set_style_text_color(button, IsDark() ? lv_color_white() : lv_color_black(), 0);
     auto* caption = lv_label_create(button);
     lv_label_set_text(caption, label);
     lv_obj_center(caption);
@@ -30,33 +49,84 @@ void LeleMenu::AddButton(const char* label, Action action, unsigned slot) {
 void LeleMenu::Show(const char* text, bool transfer) {
     if (!lvgl_port_lock(1000))
         return;
-    if (!overlay_) {
+    // Rebuild only on page navigation, never from a touch callback. Input
+    // callbacks merely queue an action, so deleted controls cannot be reused.
+    if (overlay_)
+        lv_obj_delete(overlay_);
+    {
         overlay_ = lv_obj_create(lv_layer_top());
         lv_obj_set_size(overlay_, lv_pct(100), lv_pct(100));
         lv_obj_center(overlay_);
         lv_obj_remove_flag(overlay_, LV_OBJ_FLAG_SCROLLABLE);
-        lv_obj_set_style_bg_color(overlay_, lv_color_hex(0x15202b), 0);
+        lv_obj_set_style_bg_color(overlay_, IsDark() ? lv_color_black() : lv_color_white(), 0);
         lv_obj_set_style_bg_opa(overlay_, LV_OPA_COVER, 0);
-        lv_obj_set_style_text_color(overlay_, lv_color_white(), 0);
+        lv_obj_set_style_text_color(overlay_, IsDark() ? lv_color_white() : lv_color_black(), 0);
         lv_obj_set_style_text_font(overlay_, &BUILTIN_TEXT_FONT, 0);
-        lv_obj_set_style_pad_all(overlay_, 10, 0);
-        lv_obj_set_style_pad_row(overlay_, 8, 0);
+        lv_obj_set_style_pad_all(overlay_, 6, 0);
+        lv_obj_set_style_pad_row(overlay_, 4, 0);
         lv_obj_set_flex_flow(overlay_, LV_FLEX_FLOW_COLUMN);
         auto* title = lv_label_create(overlay_);
-        lv_label_set_text(title, transfer ? "USB File Transfer" : "Lele Menu");
+        lv_label_set_text(
+            title, transfer ? "USB File Transfer" : (display_settings_ ? "Display" : "Lele Menu"));
         message_ = lv_label_create(overlay_);
         lv_obj_set_width(message_, lv_pct(100));
-        lv_obj_set_height(message_, 66);
+        lv_obj_set_height(message_, display_settings_ ? 28 : 48);
         lv_label_set_long_mode(message_, LV_LABEL_LONG_WRAP);
-        AddButton(transfer ? "Return to Assistant" : "USB File Transfer",
-                  transfer ? Action::Return : Action::Enter, 0);
-        if (!transfer)
-            AddButton("Back", Action::Close, 1);
+        if (transfer) {
+            AddButton("Return to Assistant", Action::Return, 0);
+        } else if (display_settings_) {
+            AddButton(IsDark() ? "Theme: Dark" : "Theme: Light", Action::Theme, 0);
+            AddButton("Brightness -", Action::Dim, 1);
+            AddButton("Brightness +", Action::Brighten, 2);
+            AddButton("Back", Action::MainMenu, 3);
+        } else {
+            AddButton("USB File Transfer", Action::Enter, 0);
+            AddButton("Display", Action::DisplaySettings, 1);
+            AddButton("Back", Action::Close, 2);
+        }
     }
     lv_label_set_text(message_, text);
     lv_obj_remove_flag(overlay_, LV_OBJ_FLAG_HIDDEN);
     open_ = true;
     lvgl_port_unlock();
+}
+
+void LeleMenu::ShowDisplaySettings() {
+    if (preparing_ || transfer_boot_ || restart_to_transfer_)
+        return;
+    display_settings_ = true;
+    Settings settings("display", false);
+    brightness_ = std::clamp<int32_t>(settings.GetInt("brightness", 75), 5, 100);
+    char text[40];
+    snprintf(text, sizeof(text), "Brightness: %d%%", brightness_);
+    Show(text);
+}
+
+void LeleMenu::ChangeTheme() {
+    if (!display_settings_ || preparing_ || transfer_boot_)
+        return;
+    auto* theme = LvglThemeManager::GetInstance().GetTheme(IsDark() ? "light" : "dark");
+    if (display_ && theme) {
+        display_->SetTheme(theme);  // Existing display API also persists the choice.
+        ShowDisplaySettings();
+    }
+}
+
+void LeleMenu::ChangeBrightness(int delta) {
+    if (!display_settings_ || preparing_ || transfer_boot_ || !backlight_)
+        return;
+    const int target = std::clamp(brightness_ + delta, 5, 100);
+    if (target == brightness_)
+        return;
+    brightness_ = target;
+    backlight_->SetBrightness(brightness_);
+    // Save the requested target, rather than a sample of the PWM fade. Avoid
+    // relying on SetBrightness's early return when actual brightness is equal.
+    Settings settings("display", true);
+    settings.SetInt("brightness", brightness_);
+    char text[40];
+    snprintf(text, sizeof(text), "Brightness: %d%%", brightness_);
+    Message(text);
 }
 
 void LeleMenu::Message(const char* text) {
@@ -85,8 +155,10 @@ void LeleMenu::Toggle() {
     Application::GetInstance().Schedule([this]() {
         if (IsOpen())
             Close();
-        else
+        else {
+            display_settings_ = false;
             Show("Manage SD card files on your Mac.");
+        }
     });
 }
 
@@ -131,6 +203,24 @@ void LeleMenu::Return() {
 
 void LeleMenu::Poll() {
     switch (action_.exchange(Action::None)) {
+        case Action::DisplaySettings:
+            ShowDisplaySettings();
+            break;
+        case Action::Theme:
+            ChangeTheme();
+            break;
+        case Action::Dim:
+            ChangeBrightness(-10);
+            break;
+        case Action::Brighten:
+            ChangeBrightness(10);
+            break;
+        case Action::MainMenu:
+            if (!preparing_ && !transfer_boot_ && !restart_to_transfer_) {
+                display_settings_ = false;
+                Show("Manage SD card files on your Mac.");
+            }
+            break;
         case Action::Enter:
             Enter();
             break;

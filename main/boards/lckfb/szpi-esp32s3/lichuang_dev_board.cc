@@ -342,6 +342,7 @@ public:
         InitializeButtons();
 #ifdef CONFIG_LICHUANG_USB_STORAGE
         GetBacklight()->RestoreBrightness();
+        menu_.Configure(display_, GetBacklight());
         menu_.RunTransferBootIfRequested();
 #endif
         InitializeCamera();

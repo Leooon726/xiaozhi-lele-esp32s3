@@ -5,8 +5,12 @@
 #include <lvgl.h>
 #include <atomic>
 
+class Display;
+class Backlight;
+
 class LeleMenu {
 public:
+    void Configure(Display* display, Backlight* backlight);
     void RunTransferBootIfRequested();
     void Start();
     void Toggle();
@@ -15,12 +19,22 @@ public:
     bool IsTransferBoot() const { return transfer_boot_; }
 
 private:
-    enum class Action { None, Enter, Close, Return };
+    enum class Action {
+        None,
+        Enter,
+        Close,
+        Return,
+        DisplaySettings,
+        Theme,
+        Dim,
+        Brighten,
+        MainMenu
+    };
     struct Binding {
         LeleMenu* menu;
         Action action;
     };
-    Binding bindings_[2]{};
+    Binding bindings_[4]{};
     std::atomic<Action> action_{Action::None};
     std::atomic<bool> open_{false};
     std::atomic<bool> poll_queued_{false};
@@ -32,7 +46,15 @@ private:
     esp_timer_handle_t timer_ = nullptr;
     lv_obj_t* overlay_ = nullptr;
     lv_obj_t* message_ = nullptr;
+    Display* display_ = nullptr;
+    Backlight* backlight_ = nullptr;
+    int brightness_ = 75;
+    bool display_settings_ = false;
     void Show(const char* text, bool transfer = false);
+    void ShowDisplaySettings();
+    void ChangeTheme();
+    void ChangeBrightness(int delta);
+    bool IsDark() const;
     void Message(const char* text);
     void Close();
     void Poll();

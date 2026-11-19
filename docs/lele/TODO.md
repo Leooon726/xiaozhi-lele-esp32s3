@@ -42,8 +42,15 @@
 - [官方 tusb_msc 示例](https://github.com/espressif/esp-idf/blob/master/examples/peripherals/usb/device/tusb_msc/README.md)
 - [ESP-USB 存储所有权切换 API](https://docs.espressif.com/projects/esp-usb/en/latest/esp32s3/usb_device.html)
 
-## 4. 屏幕夜间模式
+## 4. 屏幕配色与亮度（源码已实现，未刷入）
 
-- [ ] 界面以黑色背景为主，减少大面积白色或高亮区域，适合夜间使用。
-- [ ] 文字、状态和操作按钮保持清晰可辨；助手界面、歌曲列表及弹窗统一适配。
-- [ ] 实机检查夜间观感；结合背光亮度评估实际刺眼程度，不能只替换背景色就视为验收完成。
+用户最新要求：在长按功能键呼出的菜单里调颜色、调亮度。使用浅色/深色两种
+配色，深色主界面黑底白字；不做定时切换或独立夜间流程。
+
+- [x] 长按约 2 秒 → Display，提供 Theme: Light / Dark 切换，立即生效。
+- [x] 提供 Brightness - / + 和百分比，通常每次调 10 个百分点，范围 5–100%。
+- [x] 复用 display/theme 与 display/brightness 持久化，重启后恢复设置。
+- [x] 菜单跟随浅色/深色，保留 USB File Transfer 入口和最新传输恢复修复。
+- [ ] 实机检查触摸、完整布局、夜间观感、亮度上下限、重启记忆及传输返回。
+
+尚未刷入，不应将构建或主机测试当作实机验收。操作见 [显示设置](DISPLAY.md)。
