@@ -6,9 +6,15 @@
 #include "display/lcd_display.h"
 #include "esp32_camera.h"
 #include "i2c_device.h"
+#include "lele_menu.h"
 #include "mcp_server.h"
 #include "press_to_talk_mcp_tool.h"
+#include "usb_transfer.h"
 #include "wifi_board.h"
+#ifdef CONFIG_LICHUANG_TF_MUSIC
+#include "music_storage.h"
+#endif
+#include <atomic>
 
 #include <driver/i2c_master.h>
 #include <driver/spi_common.h>
@@ -17,10 +23,6 @@
 #include <esp_log.h>
 #include <esp_lvgl_port.h>
 #include <lvgl.h>
-
-#ifdef CONFIG_LICHUANG_TF_MUSIC
-void InitializeLichuangMusicTools();
-#endif
 
 #ifdef CONFIG_LICHUANG_TF_MUSIC_DEBUG
 void ToggleLichuangMusicDebug();
@@ -76,6 +78,10 @@ private:
     Pca9557* pca9557_;
     Esp32Camera* camera_;
     PressToTalkMcpTool* press_to_talk_tool_ = nullptr;
+#ifdef CONFIG_LICHUANG_USB_STORAGE
+    LeleMenu menu_;
+    std::atomic<bool> menu_long_press_{false};
+#endif
 
     void InitializeI2c() {
         // Initialize I2C peripheral
@@ -110,10 +116,22 @@ private:
     }
 
     void InitializeButtons() {
-#ifdef CONFIG_LICHUANG_TF_MUSIC_DEBUG
+#ifdef CONFIG_LICHUANG_USB_STORAGE
+        boot_button_.OnLongPress([this]() {
+            menu_long_press_ = true;
+            if (!menu_.IsTransferBoot() && press_to_talk_tool_ &&
+                press_to_talk_tool_->IsPressToTalkEnabled())
+                Application::GetInstance().StopListening();
+            menu_.Toggle();
+        });
+#elif defined(CONFIG_LICHUANG_TF_MUSIC_DEBUG)
         boot_button_.OnLongPress([]() { ToggleLichuangMusicDebug(); });
 #endif
         boot_button_.OnClick([this]() {
+#ifdef CONFIG_LICHUANG_USB_STORAGE
+            if (menu_long_press_.load() || menu_.HandleClick())
+                return;
+#endif
             auto& app = Application::GetInstance();
             // During startup (before connected), pressing BOOT button enters Wi-Fi config mode
             // without reboot
@@ -128,11 +146,20 @@ private:
         });
 
         boot_button_.OnPressDown([this]() {
+#ifdef CONFIG_LICHUANG_USB_STORAGE
+            menu_long_press_ = false;
+            if (menu_.IsOpen() || menu_.IsTransferBoot())
+                return;
+#endif
             if (press_to_talk_tool_ && press_to_talk_tool_->IsPressToTalkEnabled()) {
                 Application::GetInstance().StartListening();
             }
         });
         boot_button_.OnPressUp([this]() {
+#ifdef CONFIG_LICHUANG_USB_STORAGE
+            if (menu_long_press_ || menu_.IsOpen() || menu_.IsTransferBoot())
+                return;
+#endif
             if (press_to_talk_tool_ && press_to_talk_tool_->IsPressToTalkEnabled()) {
                 Application::GetInstance().StopListening();
             }
@@ -140,6 +167,10 @@ private:
 
 #if CONFIG_USE_DEVICE_AEC
         boot_button_.OnDoubleClick([this]() {
+#ifdef CONFIG_LICHUANG_USB_STORAGE
+            if (menu_.IsOpen() || menu_.IsTransferBoot())
+                return;
+#endif
             auto& app = Application::GetInstance();
             if (app.GetDeviceState() == kDeviceStateIdle) {
                 app.SetAecMode(app.GetAecMode() == kAecOff ? kAecOnDeviceSide : kAecOff);
@@ -279,7 +310,14 @@ private:
 
     void InitializeTools() {
 #ifdef CONFIG_LICHUANG_TF_MUSIC
+#ifdef CONFIG_LICHUANG_USB_STORAGE
+        const bool refresh = LeleUsb::ReadBootMode() == LeleUsb::BootMode::Refresh;
+        InitializeLichuangMusicTools(refresh);
+        if (refresh)
+            LeleUsb::SaveBootMode(LeleUsb::BootMode::Assistant);
+#else
         InitializeLichuangMusicTools();
+#endif
 #endif
         auto& mcp_server = McpServer::GetInstance();
         mcp_server.AddTool("self.system.reconfigure_wifi",
@@ -296,14 +334,21 @@ private:
     }
 
 public:
-    LichuangDevBoard() : boot_button_(BOOT_BUTTON_GPIO) {
+    LichuangDevBoard() : boot_button_(BOOT_BUTTON_GPIO, false, 2000) {
         InitializeI2c();
         InitializeSpi();
         InitializeSt7789Display();
         InitializeTouch();
         InitializeButtons();
+#ifdef CONFIG_LICHUANG_USB_STORAGE
+        GetBacklight()->RestoreBrightness();
+        menu_.RunTransferBootIfRequested();
+#endif
         InitializeCamera();
         InitializeTools();
+#ifdef CONFIG_LICHUANG_USB_STORAGE
+        menu_.Start();
+#endif
 
         GetBacklight()->RestoreBrightness();
     }

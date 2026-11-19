@@ -13,16 +13,20 @@
 5. **[验证记录](docs/lele/VALIDATION.md)**、**[开发历史](docs/lele/HISTORY.md)**、**[后续 OTA](docs/lele/OTA.md)**。
 6. Agent 开始工作前先读 [AGENTS.md](AGENTS.md)，无需本聊天历史。
 
-## 新源码：1024 首扩容（尚未刷入）
+## 曲库扩容与新菜单
 
 曲库上限从 128 提高至 1024，路径表移到连续 PSRAM 缓冲；满容量约 244 KiB，
 刷新校验时路径表峰值约 732 KiB。内存不足保留旧曲库，不回退挤占内部 SRAM。
-旧 SD 缓存仍可复用；搜索返回仍最多 20 首。此容量为保守目标，尚需真实大曲库
-和语音并行测试，不能视为硬件稳定性已验收。设备仍运行以下实测基线。
+旧 SD 缓存仍可复用；搜索返回仍最多 20 首。扩容版已刷入，实测扫描、保存并重启
+加载 340 首；1024 首满容量和语音并行仍需专项验收。
+
+新源码增加功能键长按 2 秒菜单、USB SD 文件传输模式，**尚未刷入**。
+在菜单选择传输后重启进入磁盘模式，Finder 推出后返回助手并重建索引；
+操作与边界见 [USB_TRANSFER.md](docs/lele/USB_TRANSFER.md)。
 
 ## 当前实测基线
 
-2026-11-19：设备已运行 `lichuang-dev-lele-music-debug`。乐乐唤醒及对话此前已实测；SD 曲库缓存加载 128 首；USB status/play/stop 已实测，直接点播前三首正常解码，用户确认听到音乐。随后用户反馈测试没有问题。
+2026-11-19：设备已运行 `lichuang-dev-lele-music-debug`。乐乐唤醒及对话此前已实测；SD 曲库扩容后缓存加载 340 首；USB status/play/stop 已实测，直接点播前三首正常解码，用户确认听到音乐。随后用户反馈测试没有问题。
 
 这不等于所有歌曲、所有采样率和所有交互组合都已验证：之前一次云端选曲后的解码失败尚未明确复现根因；BOOT 长按、长时间稳定性和自建 OTA 仍见验证清单。
 
@@ -45,7 +49,7 @@ python scripts/lele/music_debug.py stop
 | `lichuang-dev` | 原有板级变体 |
 | `lichuang-dev-lele` | 乐乐唤醒，对照版本 |
 | `lichuang-dev-lele-music` | 乐乐 + SD MP3，无本地调试入口 |
-| `lichuang-dev-lele-music-debug` | 当前实测基线，增加 USB 命令和 BOOT 长按 |
+| `lichuang-dev-lele-music-debug` | USB 命令调试；新源码长按调菜单（菜单待实机） |
 
 ## 文件与隐私
 

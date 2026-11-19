@@ -13,7 +13,7 @@
 - 自动更新：连续空闲 10 秒才扫描；语音/音乐活动使其等待，检查点合作式暂停；每 8 个检查点让出 20 ms。显式重建可跳过空闲等待；已有索引继续可用。
 - 播放：复用 `Application::RequestMusic` → `NotifyPlayer` → `DecodeMusic` → `AudioService`。混为单声道、重采样至 24 kHz；数据和任务栈优先使用 PSRAM。
 - 工具：`self.music.tf_search`、`tf_play`、`stop`、`status`、`tf_refresh`。
-- 调试：独立 debug 变体开放本地 USB status/play/stop，跳过唤醒与云端；BOOT 长按也接入同一路径。无网络调试服务、无任意文件路径/执行代码入口。
+- 调试：独立 debug 变体开放本地 USB status/play/stop，跳过唤醒与云端；设备旧版 BOOT 长按接入同一路径；新源码启用 USB 菜单时改为长按 2 秒打开菜单。无网络调试服务、无任意文件路径/执行代码入口。
 
 ## 1024 首扩容状态
 
@@ -64,3 +64,27 @@ OTA 独立推进，见 [OTA.md](OTA.md)。原版自动 OTA 仍保持禁用；不
 
 重启复用验证：再次启动直接加载 340 首缓存 generation 13，无需先完成扫描；
 进入 idle 后的后台更新仍为 340 首，cache saved=1，未观察到 panic。
+
+## 新源码：功能键菜单与 USB SD 传输（尚未刷入）
+
+用户要求先提交现有改动再实现；待办已以 b2a572d 保存。新源码在两个音乐变体
+启用 CONFIG_LICHUANG_USB_STORAGE。长按功能键 2 秒打开/关闭触屏菜单，替代
+长按点播第一首；USB music-test 仍保留在正常 debug 模式。短按保持原交互，
+菜单打开时短按关闭菜单；传输模式短按等同 Return。PTT 长按达到阈值时结束
+监听并调菜单，松手不再触发助手；双击在菜单/传输模式被隔离。
+
+菜单 USB File Transfer：主任务阻止新点播、取消排队/停止播放，等待解码器关闭
+文件及扫描/缓存 worker 结束，30 秒忙超时不切换；持久化 lele_usb/mode，
+卸载 SD 后重启。传输启动只初始化屏幕/触摸/按键/SD/TinyUSB，不构造摄像头、
+音乐工具或语音服务；正常助手与传输的 FAT 访问不共存。
+
+Finder 推出后，USB 仍 configured 且 MSC APP 挂载完成，才允许 Return；
+普通断线不能当作推出。未连接过电脑可取消。停止 USB、删除存储（SDK 检查
+延迟写入）、关闭 SD 后保存 Refresh 模式并重启，跳过旧缓存立即重建。
+模式在复位后保留，避免在主机持盘时自动回助手；挂载失败绝不格式化。
+
+依赖 esp_tinyusb 2.4.0 / tinyusb 0.21.0~6。2.4.0 的 auto_mount_off 也关闭 SCSI
+推出处理，因此保持自动所有权回调；独立启动模式不进行本地文件操作。
+正常模式维持原生 USB Serial/JTAG；传输模式日志重定向 UART0，CH340 在本机
+尚未枚举，恢复仍需 BOOT+RESET ROM 下载路径实测。暂用英文菜单以匹配内置字体。
+完整操作与恢复边界见 USB_TRANSFER.md。当前设备仍是 340 首扩容固件，没有该菜单。

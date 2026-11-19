@@ -1263,3 +1263,12 @@ config LICHUANG_TF_MUSIC_DEBUG
     help
         USB-only bounded music-test play/stop/status commands and BOOT long press.
         Calls the existing indexed MP3 playback path without cloud or wake words.
+
+config LICHUANG_USB_STORAGE
+    bool "Enable Lichuang long-press menu and USB SD transfer mode"
+    depends on LICHUANG_TF_MUSIC && !USE_EMOTE_MESSAGE_STYLE
+    select TINYUSB_MSC_ENABLED
+    default n
+    help
+        Long press BOOT to open a touch menu. USB transfer reboots into a
+        dedicated SD-only MSC mode. Eject in Finder before returning to chat.

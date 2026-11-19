@@ -1249,6 +1249,8 @@ void Application::ConfigureWakeWordForListening() {
 #ifdef CONFIG_LICHUANG_TF_MUSIC
 void Application::RequestMusic(std::string source) {
     Schedule([this, source = std::move(source)]() {
+        if (music_storage_blocked_)
+            return;
         auto state = GetDeviceState();
         if (state != kDeviceStateIdle && state != kDeviceStateListening &&
             state != kDeviceStateSpeaking && state != kDeviceStateNotifying) {
@@ -1273,6 +1275,16 @@ void Application::RequestMusic(std::string source) {
             SetDeviceState(kDeviceStateIdle);
         });
     });
+}
+
+void Application::SetMusicStorageBlocked(bool blocked) {
+    music_storage_blocked_ = blocked;
+    if (blocked) {
+        pending_music_.clear();
+        if (GetDeviceState() == kDeviceStateNotifying)
+            StopNotification();
+        music_status_ = 5;
+    }
 }
 
 void Application::RequestMusicStop() {

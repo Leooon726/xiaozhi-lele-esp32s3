@@ -126,6 +126,9 @@ public:
         music_failure_callback_ = std::move(callback);
     }
     int GetMusicStatus() const { return music_status_.load(); }
+    // Main-loop only: prevent queued/new SD playback during storage handoff.
+    void SetMusicStorageBlocked(bool blocked);
+    bool IsMusicWorkerBusy() const { return notify_player_.IsBusy(); }
 #endif
     AudioService& GetAudioService() { return audio_service_; }
     
@@ -142,6 +145,7 @@ private:
     // idle, queued, playing, completed, failed, stopped.
     std::atomic<int> music_status_{0};
     bool music_playback_ = false;
+    bool music_storage_blocked_ = false;
     std::function<void()> music_failure_callback_;
 #endif
     Application();

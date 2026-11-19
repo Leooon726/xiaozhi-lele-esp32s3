@@ -22,7 +22,10 @@
                 "CONFIG_LICHUANG_TF_MUSIC=y",
                 "CONFIG_SPIRAM_ALLOW_STACK_EXTERNAL_MEMORY=y",
                 "CONFIG_FATFS_LFN_HEAP=y",
-                "CONFIG_FATFS_API_ENCODING_UTF_8=y"
+                "CONFIG_FATFS_API_ENCODING_UTF_8=y",
+                "CONFIG_LICHUANG_USB_STORAGE=y",
+                "CONFIG_TINYUSB_DESC_PRODUCT_STRING=\"Lele SD Transfer\"",
+                "CONFIG_TINYUSB_DESC_MSC_STRING=\"SD Card\""
             ]
         },
         {
@@ -33,7 +36,10 @@
                 "CONFIG_SPIRAM_ALLOW_STACK_EXTERNAL_MEMORY=y",
                 "CONFIG_FATFS_LFN_HEAP=y",
                 "CONFIG_FATFS_API_ENCODING_UTF_8=y",
-                "CONFIG_LICHUANG_TF_MUSIC_DEBUG=y"
+                "CONFIG_LICHUANG_TF_MUSIC_DEBUG=y",
+                "CONFIG_LICHUANG_USB_STORAGE=y",
+                "CONFIG_TINYUSB_DESC_PRODUCT_STRING=\"Lele SD Transfer\"",
+                "CONFIG_TINYUSB_DESC_MSC_STRING=\"SD Card\""
             ]
         }
     ]

@@ -673,6 +673,26 @@ dependencies:
       registry_url: https://components.espressif.com
       type: service
     version: 1.0.0
+  espressif/esp_tinyusb:
+    component_hash: cfb066b239957ebfba5f7a7764e534b3000d3b400fd42d11bedb6ee5e6eaf3c9
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    - name: espressif/tinyusb
+      registry_url: https://components.espressif.com
+      require: public
+      version: '>=0.17.0~2'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    targets:
+    - esp32s2
+    - esp32s3
+    - esp32p4
+    - esp32h4
+    - esp32s31
+    version: 2.4.0
   espressif/esp_video:
     component_hash: 9f2b39db33a95caf34fbb4c6aa7b23df9694638293644c06bbe9040eaa711b3e
     dependencies:
@@ -856,6 +876,22 @@ dependencies:
       registry_url: https://components.espressif.com
       type: service
     version: 1.1.0
+  espressif/tinyusb:
+    component_hash: 95e10bf67a64897daadb95681c032cfbbdc77240931fc23f47709a254a3db290
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    targets:
+    - esp32s2
+    - esp32s3
+    - esp32p4
+    - esp32h4
+    - esp32s31
+    version: 0.21.0~6
   espressif/usb:
     component_hash: 5bcbf1bde509faef0750bbae5595b38e91cbbbd9aa0e3d308be64f9279b78aa0
     dependencies:
@@ -1153,6 +1189,7 @@ direct_dependencies:
 - espressif/esp_lvgl_port
 - espressif/esp_mmap_assets
 - espressif/esp_new_jpeg
+- espressif/esp_tinyusb
 - espressif/esp_video
 - espressif/iot_usbh_rndis
 - espressif/knob
@@ -1169,6 +1206,6 @@ direct_dependencies:
 - waveshare/esp_lcd_sh8601
 - waveshare/esp_lcd_touch_cst9217
 - wvirgil123/sscma_client
-manifest_hash: b43dcecdfb47a2deaa5a7e40d4b09c2d933e771248dc2dd9e6ee7f61912c1b3a
+manifest_hash: f90564380f0e5c21f5d1251235e4b39ad5c20a9ba59211c93bdf6153a7b59547
 target: esp32s3
 version: 3.0.0

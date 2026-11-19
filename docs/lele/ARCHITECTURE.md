@@ -24,7 +24,7 @@
 | 同目录 `music_library.h` | 有预算的迭代遍历和无堆分配的文件名匹配 |
 | 同目录 `music_index_cache.h` | 双槽缓存、校验、世代选择、空闲扫描策略 |
 | 同目录 `music_debug_command.h` | 有限调试命令语法和编号边界 |
-| 同目录 `lichuang_dev_board.cc` | 初始化音乐工具，debug BOOT 长按 |
+| 同目录 `lichuang_dev_board.cc` | 初始化音乐工具、功能键短按/长按隔离 |
 | `main/application.*` | 主线程请求调度、会话关闭、音乐状态、结束恢复、自动 OTA 策略 |
 | `main/notify/notify_player.*` | 本地 MP3/原有 HTTP Ogg 播放任务与取消/完成 |
 | `main/audio/music_stream.*` | ID3 跳过、MP3 解码、混音、重采样、诊断 |
@@ -54,3 +54,12 @@ MCP/按键/USB 都调用 Application 的请求接口，跨线程状态变更交�
 扫描预算同步到 16384 个目录项，目录队列仍有独立 128 项/16 KiB 限制。
 文件名匹配改用固定栈缓冲折叠 ASCII，避免在主线程遍历 1024 首时反复分配
 短字符串；语义仍为包含匹配。MCP 每次结果仍最多 20 个/约 6 KB。
+
+## USB SD 传输源码（未刷入）
+
+`lele_menu.*` 管理顶层触摸模态菜单和输入事件，按钮/LVGL 回调只提交动作，
+ESP timer 每 100 ms 至多排队一个主线程轮询。`music_storage.h` 给出扫描门禁和
+卸载握手；`Application::SetMusicStorageBlocked` 防止异步排队的点播重新启动。
+`usb_transfer.*` 管理 NVS 模式、仅 SD 的 TinyUSB MSC 启动与退出。采用重启
+隔离两种存储所有者；传输启动分支位于板构造的屏幕/触摸初始化之后、摄像头/
+音乐工具初始化之前，不启动音频模型。详细流程见 USB_TRANSFER.md。

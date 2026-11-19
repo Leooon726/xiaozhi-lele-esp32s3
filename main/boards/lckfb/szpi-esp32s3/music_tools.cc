@@ -19,6 +19,7 @@
 #include "mcp_server.h"
 #include "music_index_cache.h"
 #include "music_library.h"
+#include "music_storage.h"
 #ifdef CONFIG_LICHUANG_TF_MUSIC_DEBUG
 #include <fcntl.h>
 #include <unistd.h>
@@ -32,6 +33,7 @@ std::mutex card_mutex;
 sdmmc_card_t* card = nullptr;
 TfMusic::MusicPaths library;
 bool scanning = false;
+bool storage_pending = false;
 bool ready = false;
 bool library_truncated = false;
 bool cache_saved = false;
@@ -152,6 +154,8 @@ void RunScan(bool load_cache) {
 
 // Caller holds card_mutex. Explicit refresh promotes an already waiting scan.
 bool StartScanLocked(bool manual = false, bool load_cache = false) {
+    if (storage_pending)
+        return false;
     if (manual)
         manual_refresh = true;
     if (scanning)
@@ -195,7 +199,7 @@ void RunDebugCommand(TfMusic::DebugCommand command) {
                      unsigned(TfMusic::kMaxTracks - 1));
             return;
         }
-        if (!ready || command.index >= library.size()) {
+        if (storage_pending || !ready || command.index >= library.size()) {
             ESP_LOGW("TfMusicDebug", "Index not ready or track out of range");
             return;
         }
@@ -281,7 +285,37 @@ void ToggleLichuangMusicDebug() {
 }
 #endif
 
-void InitializeLichuangMusicTools() {
+void BeginLichuangStorageTransfer() {
+    std::lock_guard<std::mutex> lock(card_mutex);
+    storage_pending = true;
+    // Complete any in-flight refresh without the 10-second idle wait.
+    manual_refresh = true;
+}
+
+void CancelLichuangStorageTransfer() {
+    std::lock_guard<std::mutex> lock(card_mutex);
+    storage_pending = false;
+    manual_refresh = false;
+}
+
+bool IsLichuangStorageQuiet() {
+    std::lock_guard<std::mutex> lock(card_mutex);
+    return storage_pending && !scanning;
+}
+
+bool UnmountLichuangMusicCard() {
+    std::lock_guard<std::mutex> lock(card_mutex);
+    if (!storage_pending || scanning)
+        return false;
+    // IDF may free the card before returning a VFS unregister error. Never
+    // retain that pointer, or resume ordinary I/O after a partial unmount.
+    auto* previous = card;
+    card = nullptr;
+    ready = false;
+    return !previous || esp_vfs_fat_sdcard_unmount(kMusicRoot, previous) == ESP_OK;
+}
+
+void InitializeLichuangMusicTools(bool refresh_immediately) {
 #ifdef CONFIG_LICHUANG_TF_MUSIC_DEBUG
     if (xTaskCreate(DebugSerialTask, "music_debug", 4096, nullptr, 1, nullptr) != pdPASS)
         ESP_LOGE("TfMusicDebug", "Cannot create USB diagnostic task");
@@ -368,7 +402,7 @@ void InitializeLichuangMusicTools() {
         [](const PropertyList& p) -> ToolResult {
             std::lock_guard<std::mutex> lock(card_mutex);
             auto path = p["path"].value<std::string>();
-            if (!ready || !TfMusic::ValidPath(path) ||
+            if (storage_pending || !ready || !TfMusic::ValidPath(path) ||
                 std::find_if(library.begin(), library.end(), [&](const auto& item) {
                     return item.view() == path;
                 }) == library.end())
@@ -390,6 +424,6 @@ void InitializeLichuangMusicTools() {
         StartScanLocked();
     });
     std::lock_guard<std::mutex> lock(card_mutex);
-    StartScanLocked(false, true);
+    StartScanLocked(refresh_immediately, !refresh_immediately);
 }
 #endif

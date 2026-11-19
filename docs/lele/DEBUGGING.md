@@ -37,7 +37,7 @@ python scripts/lele/music_debug.py stop
 
 ## 物理按键
 
-设备正常启动后长按 **BOOT**：待机时播放索引第一首，已排队/播放时停止。不要在 RESET/上电时按住 BOOT（那会进入下载模式）。这一快捷操作已编译，尚未单独完成实机验收；如果不生效应看事件日志，不能随意改板引脚。
+设备当前已刷版本长按 **BOOT** 接入首曲播放/停止，未单独验收。新源码两个音乐变体启用 USB 菜单，长按约 2 秒改为打开/关闭菜单；USB 点播命令保持。关闭 CONFIG_LICHUANG_USB_STORAGE 的 debug 变体保留旧长按动作。不要在 RESET/上电时按住 BOOT（那会进入下载模式）。新菜单尚未刷入，详见 [USB_TRANSFER.md](USB_TRANSFER.md)。
 
 ## 日志判读
 
@@ -66,3 +66,5 @@ music playback 数字：0 idle、1 queued、2 playing、3 completed、4 failed�
 提示模型先 `self.music.tf_search`，query 可为空；从结果复制原样 path 调用 `self.music.tf_play`。正常点歌不要每次 refresh；用户明确要求重建时才 `tf_refresh`。停止用 `self.music.stop`，结果需以 `self.music.status` 和实际声音确认。
 
 原模型角色提示词未自动修改账号；如服务端行为不同，先核对实际调用日志。语音点歌会把文件名/匹配路径发给当前小智服务；本地 USB 点播本身不需要云端，但设备仍可正常联网。
+
+传输模式中原生 USB 接口是 MSC 磁盘，不运行 music-test 接收任务；不要运行主机点播脚本或假定端口仍为 303A:1001。退出回助手后重新发现串口。
