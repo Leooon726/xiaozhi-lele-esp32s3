@@ -27,8 +27,8 @@ SD-wide MP3 indexing with a dual-slot SD cache, and a local USB diagnostic entry
   Keep transfer boot before camera/music/audio initialization. Consume the one-shot
   request before exporting SD; the next reset returns to assistant with a rescan.
   Never resume normal I/O in the same boot after partial unmount/close failures.
-  The menu also has Display settings (light/dark and 5–100% brightness), not yet
-  flashed. Read docs/lele/DISPLAY.md. Pass display/backlight explicitly during
+  The menu also has Display settings (light/dark and 5–100% brightness), flashed but
+  hardware acceptance pending. Read docs/lele/DISPLAY.md. Pass display/backlight explicitly during
   board construction; never recursively call Board::GetInstance from that path.
 - Do not format the SD card, assume a music/ directory, or restore stock automatic
   OTA in music variants. Keep debug controls behind their separate Kconfig flag.
