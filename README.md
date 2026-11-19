@@ -26,6 +26,9 @@
 长按菜单新增 Display，可切换浅色/深色并调节、记住背光亮度；**显示设置已刷入，用户已确认切换、调亮度和重启记忆正常**。
 操作见 [显示设置](docs/lele/DISPLAY.md) 和 [USB_TRANSFER.md](docs/lele/USB_TRANSFER.md)。
 
+触屏助手点击已在源码接入（**未刷入**）：轻点中央助手区域可唤醒、打断播报或结束监听，
+手势及验收边界见 [TOUCH.md](docs/lele/TOUCH.md)。
+
 ## 当前实测基线
 
 2026-11-19：设备已运行 `lichuang-dev-lele-music-debug`。乐乐唤醒及对话此前已实测；SD 曲库扩容后缓存加载 340 首；USB status/play/stop 已实测，直接点播前三首正常解码，用户确认听到音乐。随后用户反馈测试没有问题。

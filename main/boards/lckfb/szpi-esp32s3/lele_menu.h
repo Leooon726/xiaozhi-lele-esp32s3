@@ -4,6 +4,7 @@
 #include <esp_timer.h>
 #include <lvgl.h>
 #include <atomic>
+#include "assistant_tap.h"
 
 class Display;
 class Backlight;
@@ -46,6 +47,8 @@ private:
     esp_timer_handle_t timer_ = nullptr;
     lv_obj_t* overlay_ = nullptr;
     lv_obj_t* message_ = nullptr;
+    AssistantTap assistant_tap_;
+    std::atomic<bool> assistant_tap_pending_{false};
     Display* display_ = nullptr;
     Backlight* backlight_ = nullptr;
     int brightness_ = 75;
@@ -61,5 +64,7 @@ private:
     void Enter();
     void Return();
     void AddButton(const char* label, Action action, unsigned slot);
+    void InitializeAssistantTouch();
+    void HandleAssistantTouch(lv_event_t* event);
 };
 #endif

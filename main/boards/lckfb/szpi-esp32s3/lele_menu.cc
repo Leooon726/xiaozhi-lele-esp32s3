@@ -49,6 +49,8 @@ void LeleMenu::AddButton(const char* label, Action action, unsigned slot) {
 void LeleMenu::Show(const char* text, bool transfer) {
     if (!lvgl_port_lock(1000))
         return;
+    assistant_tap_.Cancel();
+    assistant_tap_pending_ = false;
     // Rebuild only on page navigation, never from a touch callback. Input
     // callbacks merely queue an action, so deleted controls cannot be reused.
     if (overlay_)
@@ -141,6 +143,8 @@ void LeleMenu::Close() {
     if (preparing_ || transfer_boot_ || restart_to_transfer_)
         return;
     if (lvgl_port_lock(1000)) {
+        assistant_tap_.Cancel();
+        assistant_tap_pending_ = false;
         if (overlay_)
             lv_obj_add_flag(overlay_, LV_OBJ_FLAG_HIDDEN);
         open_ = false;
@@ -234,6 +238,16 @@ void LeleMenu::Poll() {
         default:
             break;
     }
+    if (assistant_tap_pending_.exchange(false) && !IsOpen() && !transfer_boot_ && !preparing_ &&
+        !restart_to_transfer_) {
+        auto& app = Application::GetInstance();
+        const auto state = app.GetDeviceState();
+        if (state == kDeviceStateIdle || state == kDeviceStateListening ||
+            state == kDeviceStateSpeaking || state == kDeviceStateNotifying) {
+            ESP_LOGI("LeleTouch", "Assistant tap in state %d", state);
+            app.ToggleChatState();
+        }
+    }
     if (!preparing_)
         return;
     auto& app = Application::GetInstance();
@@ -270,7 +284,65 @@ void LeleMenu::Poll() {
     }
 }
 
+void LeleMenu::HandleAssistantTouch(lv_event_t* event) {
+    // Called under the LVGL lock: never access Application or audio here.
+    const auto code = lv_event_get_code(event);
+    if (code != LV_EVENT_PRESSED && code != LV_EVENT_PRESSING && code != LV_EVENT_RELEASED &&
+        code != LV_EVENT_PRESS_LOST)
+        return;
+    auto* input = lv_indev_active();
+    if (!input) {
+        assistant_tap_.Cancel();
+        return;
+    }
+    lv_point_t point;
+    lv_indev_get_point(input, &point);
+    const bool enabled = !IsOpen() && !transfer_boot_;
+    switch (code) {
+        case LV_EVENT_PRESSED:
+            assistant_tap_.Begin(point.x, point.y, lv_tick_get(), enabled);
+            break;
+        case LV_EVENT_PRESSING:
+            assistant_tap_.Move(point.x, point.y);
+            break;
+        case LV_EVENT_RELEASED:
+            if (assistant_tap_.End(point.x, point.y, lv_tick_get(), enabled))
+                assistant_tap_pending_ = true;
+            break;
+        case LV_EVENT_PRESS_LOST:
+            assistant_tap_.Cancel();
+            break;
+        default:
+            break;
+    }
+}
+
+void LeleMenu::InitializeAssistantTouch() {
+    if (!lvgl_port_lock(1000)) {
+        ESP_LOGW("LeleTouch", "Cannot install assistant touch region");
+        return;
+    }
+    // Normal assistant screen only, below top-layer menus. The fixed central
+    // region includes both bitmap and font emotions without changing rendering.
+    auto* region = lv_obj_create(lv_screen_active());
+    lv_obj_remove_style_all(region);
+    lv_obj_set_size(region, lv_pct(60), lv_pct(50));
+    lv_obj_center(region);
+    lv_obj_set_style_bg_opa(region, LV_OPA_TRANSP, 0);
+    lv_obj_remove_flag(region, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(region, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_flag(region, LV_OBJ_FLAG_PRESS_LOCK);
+    lv_obj_add_event_cb(
+        region,
+        [](lv_event_t* event) {
+            static_cast<LeleMenu*>(lv_event_get_user_data(event))->HandleAssistantTouch(event);
+        },
+        LV_EVENT_ALL, this);
+    lvgl_port_unlock();
+}
+
 void LeleMenu::Start() {
+    InitializeAssistantTouch();
     esp_timer_create_args_t config = {};
     config.callback = [](void* arg) {
         auto* menu = static_cast<LeleMenu*>(arg);
