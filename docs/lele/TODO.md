@@ -42,7 +42,7 @@
 - [官方 tusb_msc 示例](https://github.com/espressif/esp-idf/blob/master/examples/peripherals/usb/device/tusb_msc/README.md)
 - [ESP-USB 存储所有权切换 API](https://docs.espressif.com/projects/esp-usb/en/latest/esp32s3/usb_device.html)
 
-## 4. 屏幕配色与亮度（已刷入，待交互验收）
+## 4. 屏幕配色与亮度（已刷入，基本交互已通过）
 
 用户最新要求：在长按功能键呼出的菜单里调颜色、调亮度。使用浅色/深色两种
 配色，深色主界面黑底白字；不做定时切换或独立夜间流程。
@@ -51,6 +51,7 @@
 - [x] 提供 Brightness - / + 和百分比，通常每次调 10 个百分点，范围 5–100%。
 - [x] 复用 display/theme 与 display/brightness 持久化，重启后恢复设置。
 - [x] 菜单跟随浅色/深色，保留 USB File Transfer 入口和最新传输恢复修复。
-- [ ] 实机检查触摸、完整布局、夜间观感、亮度上下限、重启记忆及传输返回。
+- [x] 用户确认配色切换、亮度调节立即生效，RESET 后设置保留。
+- [ ] 专项检查完整布局、夜间观感、亮度上下限、播放并行及传输返回。
 
 已刷入 4bd6dca，不应将构建、主机测试或启动日志当作交互验收。操作见 [显示设置](DISPLAY.md)。
