@@ -37,7 +37,7 @@ python scripts/lele/music_debug.py stop
 
 ## 物理按键
 
-设备当前已刷版本长按 **BOOT** 接入首曲播放/停止，未单独验收。新源码两个音乐变体启用 USB 菜单，长按约 2 秒改为打开/关闭菜单；USB 点播命令保持。关闭 CONFIG_LICHUANG_USB_STORAGE 的 debug 变体保留旧长按动作。不要在 RESET/上电时按住 BOOT（那会进入下载模式）。新菜单尚未刷入，详见 [USB_TRANSFER.md](USB_TRANSFER.md)。
+旧版长按 **BOOT** 接入首曲播放/停止；当前已刷入的两个音乐变体启用 USB 菜单，长按约 2 秒改为打开/关闭菜单；USB 点播命令保持。关闭 CONFIG_LICHUANG_USB_STORAGE 的 debug 变体保留旧长按动作。不要在 RESET/上电时按住 BOOT（那会进入下载模式）。菜单代码已刷入，物理交互待验收，详见 [USB_TRANSFER.md](USB_TRANSFER.md)。
 
 ## 日志判读
 
