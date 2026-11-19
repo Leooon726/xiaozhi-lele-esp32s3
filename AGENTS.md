@@ -35,7 +35,7 @@ SD-wide MP3 indexing with a dual-slot SD cache, and a local USB diagnostic entry
   the earlier 457e126 region was covered by later full-screen widgets;
   read docs/lele/TOUCH.md.
   Keep gesture callbacks audio-free and dispatch only on the normal main loop.
-  Songs menu is implemented but not flashed; read docs/lele/SONG_LIST.md. Keep
+  Songs menu is flashed (0850608), with basic physical interaction accepted by the user; read docs/lele/SONG_LIST.md. Keep
   page snapshots bounded and select/revalidate paths rather than mutable indices.
 - Do not format the SD card, assume a music/ directory, or restore stock automatic
   OTA in music variants. Keep debug controls behind their separate Kconfig flag.
