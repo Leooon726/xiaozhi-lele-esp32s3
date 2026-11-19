@@ -1,0 +1,25 @@
+name: Lele host tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  host:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install host test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++ libcjson-dev libmbedtls-dev
+          python -m pip install -r scripts/lele/requirements.txt numpy pillow packaging pyyaml
+      - name: Test build tooling and music control
+        env:
+          CXX: g++
+        run: python -B -m unittest discover -s scripts/tests -v

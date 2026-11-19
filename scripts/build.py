@@ -353,12 +353,28 @@ def _wake_word_sdkconfig_options(
         options.append("CONFIG_WAKE_WORD_DISABLED=y")
         return normalized, options, ["CONFIG_WAKE_WORD_DISABLED"]
 
+    if normalized.startswith("custom:"):
+        if target not in _AFE_WAKE_WORD_TARGETS:
+            raise ValueError("Custom MultiNet wake words require ESP32-S3/P4/S31 with PSRAM")
+        fields = wake_word.strip().split(":", 2)
+        if len(fields) != 3 or not re.fullmatch(r"[a-z]+(?: [a-z]+)*", fields[1]) or not fields[2].strip():
+            raise ValueError("Use custom:<space-separated pinyin>:<display name>")
+        model_symbol = "CONFIG_SR_MN_CN_MULTINET7_QUANT"
+        options.extend([
+            "CONFIG_USE_CUSTOM_WAKE_WORD=y",
+            f"{model_symbol}=y",
+            "CONFIG_CUSTOM_WAKE_WORD=" + json.dumps(fields[1], ensure_ascii=False),
+            "CONFIG_CUSTOM_WAKE_WORD_DISPLAY=" + json.dumps(fields[2], ensure_ascii=False),
+            "CONFIG_CUSTOM_WAKE_WORD_THRESHOLD=20",
+        ])
+        return "custom", options, ["CONFIG_USE_CUSTOM_WAKE_WORD", model_symbol]
+
     if target not in _ESP_WAKE_WORD_TARGETS | _AFE_WAKE_WORD_TARGETS:
         raise ValueError(f"Wake-word selection is not supported for target {target}")
     if not _WAKE_WORD_MODEL_PATTERN.fullmatch(normalized):
         raise ValueError(
             f"Invalid wake word {wake_word!r}. Use 'disabled', "
-            "'nihaoxiaozhi', 'hiesp', or an ESP-SR model name such as "
+            "'nihaoxiaozhi', 'hiesp', 'custom:<pinyin>:<display>', or an ESP-SR model name such as "
             "'wn9_jarvis_tts'."
         )
     if target in _LITE_WAKE_WORD_TARGETS and not normalized.startswith("wn9s_"):
@@ -1791,7 +1807,7 @@ def main(argv: Optional[list[str]] = None) -> None:
         metavar="MODEL",
         help=(
             "Wake-word model (for example wn9_jarvis_tts), "
-            "'nihaoxiaozhi', 'hiesp', or 'disabled'. Defaults to nihaoxiaozhi "
+            "'nihaoxiaozhi', 'hiesp', 'custom:<pinyin>:<display>', or 'disabled'. Defaults to nihaoxiaozhi "
             "for zh-CN/zh-TW and hiesp otherwise; disabled on unsupported boards"
         ),
     )

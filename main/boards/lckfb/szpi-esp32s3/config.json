@@ -8,6 +8,33 @@
             "sdkconfig_append": [
                 "CONFIG_USE_DEVICE_AEC=y"
             ]
+        },
+        {
+            "name": "lichuang-dev-lele",
+            "sdkconfig_append": [
+                "CONFIG_USE_DEVICE_AEC=y"
+            ]
+        },
+        {
+            "name": "lichuang-dev-lele-music",
+            "sdkconfig_append": [
+                "CONFIG_USE_DEVICE_AEC=y",
+                "CONFIG_LICHUANG_TF_MUSIC=y",
+                "CONFIG_SPIRAM_ALLOW_STACK_EXTERNAL_MEMORY=y",
+                "CONFIG_FATFS_LFN_HEAP=y",
+                "CONFIG_FATFS_API_ENCODING_UTF_8=y"
+            ]
+        },
+        {
+            "name": "lichuang-dev-lele-music-debug",
+            "sdkconfig_append": [
+                "CONFIG_USE_DEVICE_AEC=y",
+                "CONFIG_LICHUANG_TF_MUSIC=y",
+                "CONFIG_SPIRAM_ALLOW_STACK_EXTERNAL_MEMORY=y",
+                "CONFIG_FATFS_LFN_HEAP=y",
+                "CONFIG_FATFS_API_ENCODING_UTF_8=y",
+                "CONFIG_LICHUANG_TF_MUSIC_DEBUG=y"
+            ]
         }
     ]
 }

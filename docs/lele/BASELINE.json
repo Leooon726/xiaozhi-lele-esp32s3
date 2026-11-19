@@ -1,0 +1,40 @@
+{
+  "status_date": "2026-11-19",
+  "upstream_repository": "https://github.com/78/xiaozhi-esp32",
+  "upstream_commit": "4de00aed740595a8713b01f8332b9b2cf30685bc",
+  "version": "2.6.0",
+  "variant": "lichuang-dev-lele-music-debug",
+  "sdk_version": "v6.1.1",
+  "sdk_commit": "051e4c4eb20346e043cdd47bc388fde75ff8af63",
+  "wake_phrase": "乐乐",
+  "phonemes": "le le",
+  "model": "mn7_cn",
+  "wake_threshold": 0.2,
+  "flash_bytes": 16777216,
+  "psram_bytes": 8388608,
+  "physically_flashed_application": {
+    "address": "0x20000",
+    "file": "xiaozhi.bin",
+    "bytes": 2933408,
+    "sha256": "ce9f9a8e10ec4cd524e2db49966f02cbefa3a7e598246dc08138e673cebbd7b6"
+  },
+  "physical_evidence": {
+    "usb_status_play_stop": true,
+    "decoded_track_indices": [
+      0,
+      1,
+      2
+    ],
+    "input_pcm": "44100 Hz, 16-bit, stereo",
+    "output_pcm": "24000 Hz, mono",
+    "audible_music_user_confirmed": true,
+    "cache_tracks_loaded": 128
+  },
+  "limits": [
+    "Not all tracks/sample rates tested",
+    "BOOT long press not separately verified",
+    "Earlier cloud-selected decode failure has no confirmed unique root cause",
+    "Self-hosted OTA not deployed"
+  ],
+  "backup_or_device_credentials_in_repository": false
+}

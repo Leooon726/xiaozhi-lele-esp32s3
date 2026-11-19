@@ -1,0 +1,68 @@
+# 不经过云端的本地音乐调试
+
+目的：唤醒/云端 MCP 已经可以调用工具时，直接测试 SD → MP3 → 重采样 → PCM 队列 → 扬声器，避免每次让用户重复说话。
+
+## 开关与安全边界
+
+需要 `lichuang-dev-lele-music-debug`，它额外启用 `CONFIG_LICHUANG_TF_MUSIC_DEBUG`。普通变体默认关闭。仅本机 USB 输入和板上按键，无网络监听、无 shell、无任意文件读取接口。
+
+串口协议为 ASCII 行：
+
+```text
+music-test status
+music-test play 0
+music-test stop
+```
+
+编号从 0 开始，语法允许 0..127，实际范围取决于已加载曲库。曲库按路径排序，重建后编号可能变化。串口播放只接受 idle；状态 busy 时先停止或等待。每行最多 64 字节，溢出整行丢弃。只有已索引 MP3 能被选择。
+
+它和 MCP `tf_play` 最终都走 `Application::RequestMusic`；USB 不模拟云端语音会话，不能据此证明所有云端状态时序正常。
+
+## Mac 侧控制
+
+在已装 pyserial 的环境运行，由 agent 执行即可：
+
+```bash
+python scripts/lele/music_debug.py status
+python scripts/lele/music_debug.py play 0 --seconds 20
+python scripts/lele/music_debug.py stop
+# 多设备时添加 --port /dev/cu.usbmodem...
+```
+
+打开原生 USB 可能复位设备。脚本等待启动和曲库就绪，限速发送状态探测，写入有超时；自动控制不需要 BOOT/RESET。如果连接异常，不要同时开另一个监视器抢串口。
+
+`--seconds` 是采集时长，不是歌曲时长；脚本退出不会自动停歌。新进程重新开端口又可能复位，连续交互最好在同一串口连接内进行。
+
+原始日志在被忽略的 `.local/logs/`，可能含联网或对话信息，不得公开上传。终端筛选输出也需审阅后才能贴到公开 issue。
+
+## 物理按键
+
+设备正常启动后长按 **BOOT**：待机时播放索引第一首，已排队/播放时停止。不要在 RESET/上电时按住 BOOT（那会进入下载模式）。这一快捷操作已编译，尚未单独完成实机验收；如果不生效应看事件日志，不能随意改板引脚。
+
+## 日志判读
+
+| 日志/阶段 | 判断 |
+|---|---|
+| `TfMusicDebug: USB ready` | 本地输入任务初始化成功；还需 status 回复证明收命令 |
+| `ready=1 tracks=... playback=... state=...` | 曲库和播放状态 |
+| `Play index=... path=...` | 实际选中的文件，用于不同入口对照 |
+| `TF MP3 file opened` | FAT 文件打开通过，尚不代表解码 |
+| `Skipping ID3v2` / `MP3 decoder opened` | 标签解析、解码器初始化 |
+| `PCM format: rate=... bits=... channels=...` | 已有 PCM 帧，接下来可能重采样 |
+| `Failed: stage=... error=...` | 具体失败位置及 SDK 数字错误码；同时输出内存统计 |
+| `stage=buffers` / `decoder_open` | 首先排查分配及解码器初始化 |
+| `decode_frame` / `pcm_format` | 文件编码/损坏/格式或接口使用；结合 consumed/needed/输出大小 |
+| `resampler_open/capacity/process` | 重采样参数、内存和 SDK 返回码 |
+| `pcm_queue` | 队列或取消条件，结合 playback_id 和状态事件 |
+| `decoder_no_progress` | 缓冲/EOF 未前进，检查输入与错误策略 |
+| `stack free=...` | 任务栈余量；不要恢复 32 KiB 内部 SRAM 栈 |
+
+music playback 数字：0 idle、1 queued、2 playing、3 completed、4 failed、5 stopped。`Notification playback ... failed` 为汇总，不能单独断言故障原因。
+
+先保留选曲和阶段证据，再改代码；不同 MP3 的测试不可混为同一次。坏 MP3 应可失败回待机，不应造成重启。若分配失败，区分 free 总量和最大连续块。
+
+## 云端点歌流程
+
+提示模型先 `self.music.tf_search`，query 可为空；从结果复制原样 path 调用 `self.music.tf_play`。正常点歌不要每次 refresh；用户明确要求重建时才 `tf_refresh`。停止用 `self.music.stop`，结果需以 `self.music.status` 和实际声音确认。
+
+原模型角色提示词未自动修改账号；如服务端行为不同，先核对实际调用日志。语音点歌会把文件名/匹配路径发给当前小智服务；本地 USB 点播本身不需要云端，但设备仍可正常联网。

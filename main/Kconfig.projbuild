@@ -1246,3 +1246,20 @@ menu "TAIJIPAI_S3_CONFIG"
 endmenu
 
 endmenu
+
+config LICHUANG_TF_MUSIC
+    bool "Enable TF card MP3 tools for Lichuang Shizhanpai S3"
+    depends on BOARD_TYPE_LICHUANG_DEV_S3 && IDF_TARGET_ESP32S3
+    default n
+    help
+        Read FAT32 whole-card MP3 files through SDMMC, with cloud MCP search/play/stop.
+        Mount failures never format the card. Keeps custom music firmware from
+        being automatically replaced by stock OTA; manual OTA remains available.
+
+config LICHUANG_TF_MUSIC_DEBUG
+    bool "Enable local USB/BOOT music diagnostic controls"
+    depends on LICHUANG_TF_MUSIC && ESP_CONSOLE_USB_SERIAL_JTAG_ENABLED
+    default n
+    help
+        USB-only bounded music-test play/stop/status commands and BOOT long press.
+        Calls the existing indexed MP3 playback path without cloud or wake words.

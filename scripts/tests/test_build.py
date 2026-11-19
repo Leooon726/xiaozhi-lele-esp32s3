@@ -1059,6 +1059,28 @@ class BuildOptionTests(unittest.TestCase):
                 self.assertEqual(model, expected)
                 self.assertIn(f"CONFIG_SR_WN_{expected.upper()}=y", options)
 
+    def test_custom_wake_word_selects_multinet_only_on_supported_targets(self):
+        for target in ("esp32s3", "esp32p4", "esp32s31"):
+            with self.subTest(target=target):
+                model, options, symbols = build._wake_word_sdkconfig_options("custom:le le:乐乐", target)
+                values = build._sdkconfig_assignments(options)
+                self.assertEqual(model, "custom")
+                self.assertEqual(values["CONFIG_USE_CUSTOM_WAKE_WORD"], "y")
+                self.assertEqual(values["CONFIG_USE_AFE_WAKE_WORD"], "n")
+                self.assertEqual(values["CONFIG_USE_ESP_WAKE_WORD"], "n")
+                self.assertEqual(values["CONFIG_CUSTOM_WAKE_WORD"], '"le le"')
+                self.assertEqual(values["CONFIG_CUSTOM_WAKE_WORD_DISPLAY"], '"乐乐"')
+                model_symbol = "CONFIG_SR_MN_CN_MULTINET7_QUANT"
+                self.assertIn(model_symbol, symbols)
+        for target in ("esp32", "esp32c3", "esp32c5", "esp32c6"):
+            with self.subTest(target=target), self.assertRaisesRegex(ValueError, "MultiNet"):
+                build._wake_word_sdkconfig_options("custom:le le:乐乐", target)
+
+    def test_custom_wake_word_rejects_invalid_pinyin_or_missing_display(self):
+        for phrase in ("custom:le le", "custom:le le:", "custom:乐乐:乐乐", "custom:le\nle:乐乐"):
+            with self.subTest(phrase=phrase), self.assertRaisesRegex(ValueError, "pinyin"):
+                build._wake_word_sdkconfig_options(phrase, "esp32s3")
+
     def test_wake_word_disabled_selects_no_model(self):
         model, options, symbols = build._wake_word_sdkconfig_options(
             "disabled",

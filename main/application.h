@@ -119,6 +119,14 @@ public:
     void SetAecMode(AecMode mode);
     AecMode GetAecMode() const { return aec_mode_; }
     void PlaySound(const std::string_view& sound);
+#ifdef CONFIG_LICHUANG_TF_MUSIC
+    void RequestMusic(std::string source);
+    void RequestMusicStop();
+    void SetMusicFailureCallback(std::function<void()> callback) {
+        music_failure_callback_ = std::move(callback);
+    }
+    int GetMusicStatus() const { return music_status_.load(); }
+#endif
     AudioService& GetAudioService() { return audio_service_; }
     
     /**
@@ -129,6 +137,13 @@ public:
     void ResetProtocol();
 
 private:
+#ifdef CONFIG_LICHUANG_TF_MUSIC
+    std::string pending_music_;
+    // idle, queued, playing, completed, failed, stopped.
+    std::atomic<int> music_status_{0};
+    bool music_playback_ = false;
+    std::function<void()> music_failure_callback_;
+#endif
     Application();
     ~Application();
 
@@ -177,7 +192,8 @@ private:
     void ConfigureWakeWordForListening();
     void ShowStartupWakeWordHint();
     void HideStartupWakeWordHint();
-    void StartNotification(std::string audio_url, std::vector<NotifySubtitle> subtitles);
+    void StartNotification(std::string audio_url, std::vector<NotifySubtitle> subtitles,
+                           bool mp3 = false);
     void StopNotification();
     void HandleNotificationFinished(uint32_t playback_id, bool success);
 

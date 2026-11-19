@@ -16,6 +16,8 @@ permissions:
 
 jobs:
   prepare:
+    # This fork targets one board; keep the full upstream matrix opt-in.
+    if: ${{ github.repository == '78/xiaozhi-esp32' || github.event_name == 'workflow_dispatch' }}
     name: Determine variants to build
     runs-on: ubuntu-latest
     container:

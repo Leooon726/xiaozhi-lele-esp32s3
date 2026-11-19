@@ -1,5 +1,33 @@
 # AGENTS.md
 
+## Lele project handoff (read first)
+
+This repository extends XiaoZhi for the LiChuang Shizhanpai ESP32-S3.
+Before changes, read `docs/lele/HANDOFF.md`, `BUILD_FLASH.md`, `DEBUGGING.md`,
+and `VALIDATION.md`. They replace any reliance on prior chat history.
+Current hardware baseline: `lichuang-dev-lele-music-debug`, wake phrase 乐乐,
+SD-wide MP3 indexing with a dual-slot SD cache, and a local USB diagnostic entry.
+
+- The user authorizes reversible local development; obtain current explicit
+  authorization before any flash write/erase or OTA deployment. Build success
+  is not permission to flash. Back up all 16 MiB and verify before writing.
+- Never commit Flash/NVS backups, credentials, device identifiers, raw serial
+  logs, local toolchains or generated artifacts. Keep them under `.local/` or
+  `.tools/`, both ignored. Never force-add them, even to a private repository.
+- Use `scripts/lele/build.sh` or canonical `scripts/build.py`; `env.sh` is
+  project-local and must not modify the user's shell/system Python.
+- Use `scripts/lele/music_debug.py` for diagnosis without asking the user to
+  repeatedly wake the assistant. Serial opens may reset native USB devices.
+- Preserve PSRAM MP3 task stacks and matching WithCaps deletion; do not restore
+  the failing 32 KiB internal SRAM stack. Do not remove USB secondary-console
+  registration/RX initialization from the debug entry.
+- Do not format the SD card, assume a music/ directory, or restore stock automatic
+  OTA in music variants. Keep debug controls behind their separate Kconfig flag.
+- Update HANDOFF/VALIDATION when behavior or physical evidence changes. Distinguish
+  direct playback success from the earlier cloud-selected file failure whose
+  precise cause has not yet been demonstrated. Do not invent acceptance results.
+
+
 ## Project
 
 XiaoZhi is an ESP-IDF C/C++ voice-assistant firmware supporting many chips, boards, displays, audio devices, and network transports. A build selects exactly one board implementation.

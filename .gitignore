@@ -18,3 +18,23 @@ main/mmap_generate_emoji.h
 *.bin
 mmap_generate_*.h
 .clangd
+
+# Local toolchains, secrets and hardware artifacts
+.tools/
+.local/
+.venv/
+.env.*
+!.env.example
+outputs/
+backups/
+logs/
+*.log
+*.elf
+*.map
+*.pem
+*.key
+*.p12
+*.bin.sha256
+__pycache__/
+
+!config/lele/dependencies.lock

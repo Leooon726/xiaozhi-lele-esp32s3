@@ -2,8 +2,17 @@
 
 #include <algorithm>
 #include <array>
+#include <cerrno>
+#include <cstdio>
 #include <cstring>
 #include <memory>
+#ifdef CONFIG_LICHUANG_TF_MUSIC
+#include <esp_heap_caps.h>
+#include <freertos/idf_additions.h>
+#include "audio_codec.h"
+#include "music_stream.h"
+#endif
+#include "sd_audio_path.h"
 
 #include <esp_log.h>
 
@@ -14,11 +23,18 @@
 namespace {
 constexpr int kHttpTimeoutMs = 5000;
 constexpr size_t kHttpReadBufferSize = 1024;
+#ifdef CONFIG_LICHUANG_TF_MUSIC
+constexpr uint32_t kMusicTaskStackSize = 32768;
+#endif
 constexpr uint32_t kNotifyTaskStackSize = 6144;
 constexpr UBaseType_t kNotifyTaskPriority = 2;
 const char* TAG = "NotifyPlayer";
 
 bool IsSupportedUrl(const std::string& url) {
+#ifdef CONFIG_LICHUANG_TF_MUSIC
+    if (SdAudio::SafePath(url) && SdAudio::Playable(url))
+        return true;
+#endif
     return url.compare(0, 7, "http://") == 0 || url.compare(0, 8, "https://") == 0;
 }
 }  // namespace
@@ -29,8 +45,10 @@ NotifyPlayer::~NotifyPlayer() { Stop(); }
 
 bool NotifyPlayer::Start(std::string audio_url, std::vector<NotifySubtitle> subtitles,
                          uint32_t playback_id, SubtitleCallback subtitle_callback,
-                         FinishedCallback finished_callback) {
-    if (playback_id == 0 || !IsSupportedUrl(audio_url)) {
+                         FinishedCallback finished_callback, bool mp3) {
+    if (playback_id == 0 || !IsSupportedUrl(audio_url) ||
+        (mp3 && !(SdAudio::SafePath(audio_url) && SdAudio::Playable(audio_url))) ||
+        (!mp3 && audio_url.starts_with("/sdcard/"))) {
         return false;
     }
 
@@ -45,6 +63,7 @@ bool NotifyPlayer::Start(std::string audio_url, std::vector<NotifySubtitle> subt
             return false;
         }
         audio_url_ = std::move(audio_url);
+        mp3_ = mp3;
         subtitles_ = std::move(subtitles);
         displayed_text_.clear();
         subtitle_callback_ = std::move(subtitle_callback);
@@ -62,10 +81,27 @@ bool NotifyPlayer::Start(std::string audio_url, std::vector<NotifySubtitle> subt
         completion_reported_ = false;
     }
 
-    BaseType_t created = xTaskCreate(WorkerEntry, "notify_http", kNotifyTaskStackSize, this,
-                                     kNotifyTaskPriority, &task_handle_);
+    BaseType_t created;
+#ifdef CONFIG_LICHUANG_TF_MUSIC
+    if (mp3) {
+        // AFE/Wi-Fi fragment internal SRAM. Keep the MP3 worker's large stack
+        // in PSRAM; its TCB still resides in internal memory.
+        created = xTaskCreateWithCaps(WorkerEntry, "tf_music", kMusicTaskStackSize, this,
+                                      kNotifyTaskPriority, &task_handle_,
+                                      MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    } else
+#endif
+    {
+        created = xTaskCreate(WorkerEntry, "notify_http", kNotifyTaskStackSize, this,
+                              kNotifyTaskPriority, &task_handle_);
+    }
     if (created != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create notification HTTP task");
+        ESP_LOGE(TAG, "Failed to create playback task (MP3=%d)", mp3);
+#ifdef CONFIG_LICHUANG_TF_MUSIC
+        ESP_LOGE(TAG, "Largest free blocks: internal=%u, PSRAM=%u",
+                 unsigned(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
+                 unsigned(heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)));
+#endif
         std::lock_guard<std::mutex> lock(mutex_);
         active_ = false;
         worker_running_ = false;
@@ -167,7 +203,21 @@ void NotifyPlayer::OnPlaybackDrained() {
 
 void NotifyPlayer::WorkerEntry(void* arg) {
     auto* player = static_cast<NotifyPlayer*>(arg);
+#ifdef CONFIG_LICHUANG_TF_MUSIC
+    // Snapshot before WorkerTask clears worker_running_: another playback may
+    // start immediately afterwards and replace mp3_.
+    bool external_stack;
+    {
+        std::lock_guard<std::mutex> lock(player->mutex_);
+        external_stack = player->mp3_;
+    }
+#endif
     player->WorkerTask();
+#ifdef CONFIG_LICHUANG_TF_MUSIC
+    if (external_stack) {
+        vTaskDeleteWithCaps(nullptr);
+    }
+#endif
     vTaskDelete(nullptr);
 }
 
@@ -181,21 +231,55 @@ void NotifyPlayer::WorkerTask() {
     }
 
     bool success = false;
-    auto http = Board::GetInstance().GetNetwork()->CreateHttp(0);
-    if (http) {
-        http->SetTimeout(kHttpTimeoutMs);
-        http->SetHeader("Accept", "audio/ogg, application/ogg");
-        http->SetHeader("Accept-Encoding", "identity");
-        auto opened = http->Open("GET", audio_url);
-        if (opened) {
-            auto status = http->GetStatusCode();
-            if (status && *status >= 200 && *status < 300 && !IsCancelled(playback_id)) {
-                auto demuxer = std::make_unique<OggDemuxer>();
-                uint32_t media_position_ms = 0;
-                bool packet_error = false;
-                demuxer->OnPacket(
-                    [this, playback_id, &media_position_ms, &packet_error](
-                        const uint8_t* data, int sample_rate, int frame_duration_ms, size_t size) {
+#ifdef CONFIG_LICHUANG_TF_MUSIC
+    if (mp3_) {
+        auto cancelled = [this, playback_id]() { return IsCancelled(playback_id); };
+        auto sink = [this, playback_id, &cancelled](std::vector<int16_t>&& pcm) {
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                if (cancelled_ || !active_)
+                    return false;
+                playback_drained_ = false;
+                stream_started_ = true;
+            }
+            return audio_service_.PushMusicPcm(std::move(pcm), playback_id, cancelled);
+        };
+        const int rate = Board::GetInstance().GetAudioCodec()->output_sample_rate();
+        if (SdAudio::SafePath(audio_url) && SdAudio::Playable(audio_url)) {
+            FILE* file = std::fopen(audio_url.c_str(), "rb");
+            if (file) {
+                ESP_LOGI(TAG, "TF MP3 file opened; output rate=%d", rate);
+                success = DecodeMusic(
+                    [file](uint8_t* data, size_t size) {
+                        size_t n = std::fread(data, 1, size, file);
+                        return std::ferror(file) ? -1 : static_cast<int>(n);
+                    },
+                    cancelled, rate, sink);
+                std::fclose(file);
+                ESP_LOGI(TAG, "TF MP3 decoder finished: success=%d, cancelled=%d, stack free=%u",
+                         success, cancelled(), unsigned(uxTaskGetStackHighWaterMark(nullptr)));
+            } else {
+                ESP_LOGE(TAG, "TF MP3 file open failed: errno=%d", errno);
+            }
+        }
+    } else
+#endif
+    {
+        auto http = Board::GetInstance().GetNetwork()->CreateHttp(0);
+        if (http) {
+            http->SetTimeout(kHttpTimeoutMs);
+            http->SetHeader("Accept", "audio/ogg, application/ogg");
+            http->SetHeader("Accept-Encoding", "identity");
+            auto opened = http->Open("GET", audio_url);
+            if (opened) {
+                auto status = http->GetStatusCode();
+                if (status && *status >= 200 && *status < 300 && !IsCancelled(playback_id)) {
+                    auto demuxer = std::make_unique<OggDemuxer>();
+                    uint32_t media_position_ms = 0;
+                    bool packet_error = false;
+                    demuxer->OnPacket([this, playback_id, &media_position_ms, &packet_error](
+                                          const uint8_t* data, int sample_rate,
+                                          int frame_duration_ms, size_t size) {
                         if (packet_error || IsCancelled(playback_id)) {
                             packet_error = true;
                             return;
@@ -228,45 +312,49 @@ void NotifyPlayer::WorkerTask() {
                         media_position_ms += frame_duration_ms;
                     });
 
-                std::array<char, kHttpReadBufferSize> buffer;
-                while (!packet_error && !IsCancelled(playback_id)) {
-                    auto size = http->Read(buffer.data(), buffer.size());
-                    if (!size) {
-                        ESP_LOGE(TAG, "Notification HTTP read failed: %s",
-                                 size.error().ToString().c_str());
-                        break;
-                    }
-                    if (*size == 0) {
-                        success = demuxer->Finish();
-                        if (!success) {
-                            ESP_LOGE(
-                                TAG,
-                                "Notification Ogg stream ended before a complete audio stream");
+                    std::array<char, kHttpReadBufferSize> buffer;
+                    while (!packet_error && !IsCancelled(playback_id)) {
+                        auto size = http->Read(buffer.data(), buffer.size());
+                        if (!size) {
+                            ESP_LOGE(TAG, "Notification HTTP read failed: %s",
+                                     size.error().ToString().c_str());
+                            break;
                         }
-                        break;
+                        if (*size == 0) {
+                            success = demuxer->Finish();
+                            if (!success) {
+                                ESP_LOGE(
+                                    TAG,
+                                    "Notification Ogg stream ended before a complete audio stream");
+                            }
+                            break;
+                        }
+                        demuxer->Process(reinterpret_cast<const uint8_t*>(buffer.data()), *size);
+                        if (demuxer->HasError()) {
+                            packet_error = true;
+                        }
                     }
-                    demuxer->Process(reinterpret_cast<const uint8_t*>(buffer.data()), *size);
-                    if (demuxer->HasError()) {
-                        packet_error = true;
-                    }
+                } else if (!status) {
+                    ESP_LOGE(TAG, "Notification HTTP status failed: %s",
+                             status.error().ToString().c_str());
+                } else {
+                    ESP_LOGE(TAG, "Notification HTTP request returned status %d", *status);
                 }
-            } else if (!status) {
-                ESP_LOGE(TAG, "Notification HTTP status failed: %s",
-                         status.error().ToString().c_str());
             } else {
-                ESP_LOGE(TAG, "Notification HTTP request returned status %d", *status);
+                ESP_LOGE(TAG, "Failed to open notification HTTP request: %s",
+                         opened.error().ToString().c_str());
             }
-        } else {
-            ESP_LOGE(TAG, "Failed to open notification HTTP request: %s",
-                     opened.error().ToString().c_str());
+            http->Close();
+            http.reset();
         }
-        http->Close();
-        http.reset();
     }
 
     FinishedCallback callback;
     uint32_t completed_playback_id = 0;
     bool report_success = false;
+    // No more PCM is enqueued by this worker. A drain event may have been
+    // handled between clearing playback_drained_ and pushing the last chunk.
+    const bool queues_idle = audio_service_.IsPlaybackIdle();
     {
         std::lock_guard<std::mutex> lock(mutex_);
         worker_running_ = false;
@@ -276,7 +364,7 @@ void NotifyPlayer::WorkerTask() {
                 callback = CompleteLocked(completed_playback_id);
             } else {
                 http_finished_ = true;
-                if (playback_drained_) {
+                if (queues_idle) {
                     callback = CompleteLocked(completed_playback_id);
                     report_success = true;
                 }
