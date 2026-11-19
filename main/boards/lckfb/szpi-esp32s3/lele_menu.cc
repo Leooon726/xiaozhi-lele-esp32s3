@@ -117,7 +117,8 @@ void LeleMenu::Enter() {
 
 void LeleMenu::Return() {
     if (LeleUsb::Finish() != ESP_OK) {
-        Message("Eject the SD disk in Finder.\nIf already ejected, please retry.");
+        Message(LeleUsb::Failed() ? "SD error. Press RESET to\nreturn to the assistant."
+                                  : "Eject disk, then tap Return.\nOr restart the device.");
         return;
     }
     usb_ready_ = false;
@@ -197,12 +198,12 @@ void LeleMenu::Start() {
 }
 
 void LeleMenu::RunTransferBootIfRequested() {
-    if (LeleUsb::ReadBootMode() != LeleUsb::BootMode::Transfer)
+    if (!LeleUsb::TakeTransferBootRequest())
         return;
     transfer_boot_ = true;
     Show("Preparing SD card...", true);
     usb_ready_ = LeleUsb::Start() == ESP_OK;
-    Message(usb_ready_ ? "Open the SD disk in Finder.\nEject before returning here."
+    Message(usb_ready_ ? "Open SD disk on computer.\nEject before tapping Return."
                        : "SD/USB setup failed.\nReturn to retry in assistant mode.");
     bool previous_released = false;
     // Deliberately never construct camera/music tools or start Application audio.
@@ -210,7 +211,7 @@ void LeleMenu::RunTransferBootIfRequested() {
         const bool released = usb_ready_ && LeleUsb::HostReleased();
         if (released != previous_released) {
             Message(released ? "SD disk ejected.\nYou can return to the assistant."
-                             : "Open the SD disk in Finder.\nEject before returning here.");
+                             : "Open SD disk on computer.\nEject before tapping Return.");
             previous_released = released;
         }
         Poll();

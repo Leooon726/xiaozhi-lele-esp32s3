@@ -107,14 +107,21 @@ HARNESS = r'''
 int main(int argc,char** argv) {
     using namespace LeleUsb;
     assert(ReadBootMode()==BootMode::Assistant);
-    open_error=ESP_FAIL;assert(ReadBootMode()==BootMode::Transfer);
-    open_error=ESP_OK;get_error=ESP_FAIL;assert(ReadBootMode()==BootMode::Transfer);
-    get_error=ESP_OK;persistent_mode=99;assert(ReadBootMode()==BootMode::Transfer);
+    open_error=ESP_FAIL;assert(ReadBootMode()==BootMode::Refresh);
+    open_error=ESP_OK;get_error=ESP_FAIL;assert(ReadBootMode()==BootMode::Refresh);
+    get_error=ESP_OK;persistent_mode=99;assert(ReadBootMode()==BootMode::Refresh);
+    persistent_mode=1;assert(ReadBootMode()==BootMode::Refresh); // Upgrade old stuck flag.
+    assert(!TakeTransferBootRequest());
     commit_error=ESP_FAIL;
-    assert(SaveBootMode(BootMode::Transfer)!=ESP_OK && persistent_mode==99);
+    assert(SaveBootMode(BootMode::Transfer)!=ESP_OK && persistent_mode==1);
     commit_error=ESP_OK;
     assert(SaveBootMode(BootMode::Transfer)==ESP_OK);
-    assert(ReadBootMode()==BootMode::Transfer);
+    assert(ReadBootMode()==BootMode::Transfer && persistent_mode==3);
+    commit_error=ESP_FAIL;
+    assert(!TakeTransferBootRequest() && persistent_mode==3); // Never export on consume failure.
+    commit_error=ESP_OK;
+    assert(TakeTransferBootRequest() && persistent_mode==2);
+    assert(!TakeTransferBootRequest() && ReadBootMode()==BootMode::Refresh); // Next boot.
     if(argc>1 && argv[1][0]=='s') {
         sd_error=ESP_FAIL;assert(Start()!=ESP_OK);
         assert(Finish()==ESP_OK && host_closed==1);return 0;
@@ -126,11 +133,16 @@ int main(int argc,char** argv) {
     mounted=true;
     tinyusb_event_t attached{TINYUSB_EVENT_ATTACHED};device_callback(&attached,nullptr);
     assert(Finish()!=ESP_OK && delete_calls==0); // Cannot leave while host owns disk.
+    mounted=false;
+    assert(!HostReleased() && Finish()!=ESP_OK); // Disconnect alone is not a completed handoff.
     mounted=true;
     event(TINYUSB_MSC_EVENT_MOUNT_START,TINYUSB_MSC_STORAGE_MOUNT_APP);
     assert(!HostReleased()); // A request is not completed ownership transfer.
     event(TINYUSB_MSC_EVENT_MOUNT_COMPLETE,TINYUSB_MSC_STORAGE_MOUNT_APP);
-    mounted=false;assert(!HostReleased()); // Unplug/reset is not safe eject.
+    mounted=false;assert(HostReleased()); // Eject can also deconfigure USB.
+    if(argc>1 && argv[1][0]=='e') {
+        assert(Finish()==ESP_OK && host_closed==1);return 0;
+    }
     mounted=true;assert(HostReleased());
     if(argc>1 && argv[1][0]=='f') {
         event(TINYUSB_MSC_EVENT_FORMAT_REQUIRED,TINYUSB_MSC_STORAGE_MOUNT_APP);
@@ -142,9 +154,9 @@ int main(int argc,char** argv) {
     event(TINYUSB_MSC_EVENT_MOUNT_COMPLETE,TINYUSB_MSC_STORAGE_MOUNT_APP);
     assert(HostReleased());
     usb_stop_error=ESP_FAIL;
-    assert(Finish()!=ESP_OK && delete_calls==0 && persistent_mode==1);
+    assert(Finish()!=ESP_OK && delete_calls==0 && persistent_mode==2);
     usb_stop_error=ESP_OK;delete_error=ESP_ERR_INVALID_STATE;
-    assert(Finish()!=ESP_OK && host_closed==0 && persistent_mode==1);
+    assert(Finish()!=ESP_OK && host_closed==0 && persistent_mode==2);
     delete_error=ESP_OK;
     assert(Finish()==ESP_OK && host_closed==1);
     assert(SaveBootMode(BootMode::Refresh)==ESP_OK && ReadBootMode()==BootMode::Refresh);
@@ -211,6 +223,6 @@ int main() {
                 '-std=c++23', '-I' + str(folder), '-I' + str(BOARD),
                 str(folder / 'test.cc'), '-o', str(exe)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
-            for scenario in ['normal', 'format', 'sd-failure', 'cancel-before-connect']:
+            for scenario in ['normal', 'format', 'sd-failure', 'cancel-before-connect', 'eject-deconfigured']:
                 result = subprocess.run([str(exe), scenario], capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, scenario + result.stderr)

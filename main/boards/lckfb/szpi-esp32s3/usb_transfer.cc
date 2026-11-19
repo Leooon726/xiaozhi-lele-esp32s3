@@ -49,17 +49,17 @@ BootMode ReadBootMode() {
     const auto opened = nvs_open("lele_usb", NVS_READONLY, &handle);
     if (opened == ESP_ERR_NVS_NOT_FOUND)
         return BootMode::Assistant;
-    // Fail closed: an unreadable persistent mode must not expose a live FAT
-    // volume to both the assistant and a computer holding the prior USB disk.
+    // Only a valid, explicit one-shot request may enable MSC. Invalid or old
+    // persistent modes recover into the assistant with a fresh directory scan.
     if (opened != ESP_OK)
-        return BootMode::Transfer;
+        return BootMode::Refresh;
     int32_t mode = 0;
     const auto result = nvs_get_i32(handle, "mode", &mode);
     nvs_close(handle);
     if (result == ESP_ERR_NVS_NOT_FOUND)
         return BootMode::Assistant;
-    if (result != ESP_OK || mode < 0 || mode > 2)
-        return BootMode::Transfer;
+    if (result != ESP_OK || (mode != 0 && mode != 2 && mode != 3))
+        return BootMode::Refresh;
     return static_cast<BootMode>(mode);
 }
 
@@ -73,6 +73,19 @@ esp_err_t SaveBootMode(BootMode mode) {
         result = nvs_commit(handle);
     nvs_close(handle);
     return result;
+}
+
+bool TakeTransferBootRequest() {
+    if (ReadBootMode() != BootMode::Transfer)
+        return false;
+    // Persist the recovery target before USB is exposed. If consumption fails,
+    // stay in assistant mode rather than creating another persistent trap.
+    const auto result = SaveBootMode(BootMode::Refresh);
+    if (result != ESP_OK) {
+        ESP_LOGE(kTag, "Cannot consume transfer request: %s", esp_err_to_name(result));
+        return false;
+    }
+    return true;
 }
 
 esp_err_t Start() {
@@ -131,15 +144,16 @@ esp_err_t Start() {
 bool Failed() { return failed.load(); }
 
 bool HostReleased() {
-    // A cable disconnect/reset is not a safe eject. On eject, USB remains
-    // configured but MSC reports no medium after its APP mount completes.
-    return device_started && tud_mounted() && app_owned && !failed;
+    // A completed APP ownership transition is authoritative. Hosts can also
+    // deconfigure USB after eject; tud_mounted() must not veto that release.
+    // Finish still stops USB and checks deferred writes before any app restart.
+    return device_started && app_owned && !failed;
 }
 
 esp_err_t Finish() {
     if (device_started) {
         // Cancelling before the first USB configuration is also safe: no host
-        // has accessed this LUN yet. Once attached, unplug/reset cannot bypass eject.
+        // has accessed this LUN yet. Otherwise require completed owner handoff.
         if ((ever_attached || tud_mounted()) && !HostReleased())
             return ESP_ERR_INVALID_STATE;
         // First stop USB servicing, so no callback can touch a deleted LUN.

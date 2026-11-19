@@ -24,8 +24,9 @@ SD-wide MP3 indexing with a dual-slot SD cache, and a local USB diagnostic entry
 - Current firmware (menu/MSC interaction not yet hardware-accepted): CONFIG_LICHUANG_USB_STORAGE replaces BOOT long-press
   playback with a 2-second menu and reboot-isolated MSC mode. Read
   docs/lele/USB_TRANSFER.md before touching USB, ownership or persistent mode.
-  Keep transfer boot before camera/music/audio initialization; never clear mode
-  or resume normal I/O after partial unmount/close failures.
+  Keep transfer boot before camera/music/audio initialization. Consume the one-shot
+  request before exporting SD; the next reset returns to assistant with a rescan.
+  Never resume normal I/O in the same boot after partial unmount/close failures.
 - Do not format the SD card, assume a music/ directory, or restore stock automatic
   OTA in music variants. Keep debug controls behind their separate Kconfig flag.
 - Update HANDOFF/VALIDATION when behavior or physical evidence changes. Distinguish

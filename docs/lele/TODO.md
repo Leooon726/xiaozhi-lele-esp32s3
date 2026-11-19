@@ -33,6 +33,9 @@
 
 当前状态：源码已接入功能键长按 2 秒菜单及独立启动 USB MSC/SDMMC 模式，使用官方 esp_tinyusb；当前设备已刷入并正常启动；已进入传输模式，Mac 枚举和 340 首目录/缓存读取通过；当前卷只读，写入及退出仍待验收。复制/中文改名/安全推出/恢复/断线仍需实机验收，故上列验收项保持未勾选。见 [实现与操作说明](USB_TRANSFER.md)。
 
+最新源码已将永久传输模式改为一次性请求，并修复推出后 USB 取消配置导致无法返回；
+修复版未刷入，需验收旧状态迁移、RESET/重新上电恢复及正常推出返回。
+
 参考：
 
 - [ESP-IDF USB Device Stack（ESP32-S3）](https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-reference/peripherals/usb_device.html)
