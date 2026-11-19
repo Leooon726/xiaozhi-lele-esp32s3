@@ -28,9 +28,11 @@ int main() {
     assert(lv_indev_search_obj(screen, &center) == region);
     lv_area_t area;
     lv_obj_get_coords(region, &area);
-    assert(area.x1 == 64 && area.x2 == 255 && area.y1 == 60 && area.y2 == 179);
-    lv_point_t outside{20, 20};
-    assert(lv_indev_search_obj(screen, &outside) != region);
+    assert(area.x1 == 0 && area.x2 == 319 && area.y1 == 0 && area.y2 == 239);
+    lv_point_t points[] = {{0, 0},   {319, 0},   {0, 239}, {319, 239}, {160, 120},
+                           {160, 0}, {160, 239}, {0, 120}, {319, 120}};
+    for (auto& point : points)
+        assert(lv_indev_search_obj(screen, &point) == region);
     assert(lv_obj_get_style_bg_opa(region, LV_PART_MAIN) == LV_OPA_TRANSP);
     const auto children = lv_obj_get_child_count(screen);
     assert(EnsureAssistantTouchRegion(true, false, region, Event, nullptr) == region);
@@ -42,7 +44,8 @@ int main() {
     lv_obj_set_size(overlay, lv_pct(100), lv_pct(100));
     lv_obj_center(overlay);
     lv_obj_update_layout(lv_layer_top());
-    assert(lv_indev_search_obj(lv_layer_top(), &center) == overlay);
+    for (auto& point : points)
+        assert(lv_indev_search_obj(lv_layer_top(), &point) == overlay);
     lv_obj_add_flag(overlay, LV_OBJ_FLAG_HIDDEN);
     assert(!lv_indev_search_obj(lv_layer_top(), &center));
     assert(lv_indev_search_obj(screen, &center) == region);

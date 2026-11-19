@@ -9,7 +9,7 @@ inline lv_obj_t* EnsureAssistantTouchRegion(bool ui_ready, bool transfer_boot, l
         return existing;
     auto* region = lv_obj_create(lv_screen_active());
     lv_obj_remove_style_all(region);
-    lv_obj_set_size(region, lv_pct(60), lv_pct(50));
+    lv_obj_set_size(region, lv_pct(100), lv_pct(100));
     lv_obj_center(region);
     lv_obj_set_style_bg_opa(region, LV_OPA_TRANSP, 0);
     lv_obj_remove_flag(region, LV_OBJ_FLAG_SCROLLABLE);

@@ -334,8 +334,8 @@ void LeleMenu::InitializeAssistantTouch() {
         ESP_LOGW("LeleTouch", "Cannot install assistant touch region");
         return;
     }
-    // Normal assistant screen only, below top-layer menus. The fixed central
-    // region includes both bitmap and font emotions without changing rendering.
+    // Cover the normal assistant screen, below top-layer menus, without
+    // changing the display's bitmap or font rendering.
     auto* region = EnsureAssistantTouchRegion(
         display_ && display_->IsSetupUICalled(), transfer_boot_, assistant_region_,
         [](lv_event_t* event) {
