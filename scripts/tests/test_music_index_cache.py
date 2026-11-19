@@ -26,7 +26,7 @@ class MusicIndexCacheTests(unittest.TestCase):
 #include <iterator>
 static TfMusic::Index MakeIndex(const std::string& root, const std::string& name) {
     TfMusic::Index index;
-    index.paths.push_back(root + "/" + name);
+    assert(index.paths.push_back(root + "/" + name));
     index.path_bytes = index.paths[0].size() + 1;
     return index;
 }
@@ -76,9 +76,9 @@ int main(int argc, char** argv) {
     } else if (mode == "corrupt") {
         std::fstream f(a, std::ios::in | std::ios::out | std::ios::binary);
         f.seekp(30); f.put('x'); f.close();
-        auto unchanged = loaded;
+        std::string unchanged(loaded.paths[0].view());
         assert(!TfMusic::LoadCache(a, root, loaded, generation));
-        assert(loaded.paths == unchanged.paths);
+        assert(loaded.paths.size() == 1 && loaded.paths[0].view() == unchanged);
         assert(TfMusic::LoadLatestCache(a, b, root, loaded, generation) == -1);
     } else if (mode == "legacy") {
         std::fstream f(a, std::ios::in | std::ios::out | std::ios::binary);
@@ -88,7 +88,7 @@ int main(int argc, char** argv) {
         assert(!TfMusic::LoadCache(a, base + "/other", loaded, generation));
     } else if (mode == "bad_header") {
         std::fstream f(a, std::ios::in | std::ios::out | std::ios::binary);
-        uint8_t count[4]; TfMusic::Put32(count, 1000000);
+        uint8_t count[4]; TfMusic::Put32(count, 1025);
         f.seekp(12); f.write(reinterpret_cast<char*>(count), 4); f.close();
         assert(!TfMusic::LoadCache(a, root, loaded, generation));
     } else if (mode == "trailing_bytes") {
@@ -117,6 +117,20 @@ int main(int argc, char** argv) {
         TfMusic::Index failed;
         TfMusic::Scan(a, a, 0, failed);
         assert(failed.io_error);
+    } else if (mode == "large") {
+        TfMusic::Index large;
+        for (size_t i = 0; i < TfMusic::kMaxTracks; ++i) {
+            const std::string prefix = "track-" + std::to_string(10000+i);
+            const std::string path = root + "/" + prefix +
+                std::string(240-root.size()-1-prefix.size()-4, 'x') + ".mp3";
+            assert(path.size() == 240 && large.paths.push_back(path));
+            large.path_bytes += path.size()+1;
+        }
+        assert(large.paths.storage_bytes() == 1024 * 244);
+        assert(TfMusic::SaveCache(b, root, large, 11));
+        assert(TfMusic::LoadLatestCache(a, b, root, loaded, generation) == 1);
+        assert(loaded.paths.size() == 1024 && loaded.paths == large.paths);
+        assert(generation == 11);
     } else if (mode == "empty") {
         TfMusic::Index empty;
         assert(TfMusic::SaveCache(b, root, empty, 11));
@@ -135,6 +149,7 @@ int main(int argc, char** argv) {
         with tempfile.TemporaryDirectory() as folder:
             subprocess.run([str(self.exe), mode, folder], check=True, capture_output=True, text=True)
 
+    def test_1024_max_length_paths_roundtrip(self): self.run_case("large")
     def test_roundtrip_without_enumerating_songs(self): self.run_case("roundtrip")
     def test_latest_valid_generation(self): self.run_case("newest")
     def test_interrupted_inactive_slot_keeps_old_cache(self): self.run_case("interrupted")

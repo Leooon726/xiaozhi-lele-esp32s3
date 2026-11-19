@@ -1,6 +1,7 @@
 #pragma once
 #include <charconv>
 #include <string_view>
+#include "music_limits.h"
 
 namespace TfMusic {
 enum class DebugAction { Invalid, Play, Stop, Status };
@@ -19,7 +20,7 @@ inline DebugCommand ParseDebugCommand(std::string_view line) {
     line.remove_prefix(prefix.size());
     unsigned index = 0;
     auto [end, error] = std::from_chars(line.data(), line.data() + line.size(), index);
-    if (error != std::errc{} || end != line.data() + line.size() || index >= 128)
+    if (error != std::errc{} || end != line.data() + line.size() || index >= kMaxTracks)
         return {};
     return {DebugAction::Play, index};
 }

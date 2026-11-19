@@ -20,7 +20,8 @@
 | `main/boards/lckfb/szpi-esp32s3/config.json` | 乐乐、音乐和 debug 构建变体 |
 | `main/Kconfig.projbuild` | 音乐和调试功能开关 |
 | `main/boards/lckfb/szpi-esp32s3/music_tools.cc` | SD 挂载、扫描任务、RAM 曲库、MCP、USB/按键测试入口 |
-| 同目录 `music_library.h` | 有预算的迭代遍历和文件名匹配 |
+| 同目录 `music_limits.h` / `music_paths.h` | 1024 首预算、连续 PSRAM 路径表与可失败增长 |
+| 同目录 `music_library.h` | 有预算的迭代遍历和无堆分配的文件名匹配 |
 | 同目录 `music_index_cache.h` | 双槽缓存、校验、世代选择、空闲扫描策略 |
 | 同目录 `music_debug_command.h` | 有限调试命令语法和编号边界 |
 | 同目录 `lichuang_dev_board.cc` | 初始化音乐工具，debug BOOT 长按 |
@@ -39,3 +40,17 @@
 MCP/按键/USB 都调用 Application 的请求接口，跨线程状态变更交给 Schedule。USB 播放要求 idle，MCP 可结束语音会话后排队；两者复用后半段播放器。PCM 队列有界，取消按 playback_id 隔离。
 
 缓存先落盘到非活动槽，flush/fsync/关闭后读回验证；成功后更新 RAM，I/O 失败保留旧索引。缓存用内容校验防误损坏，不是加密或安全认证。挂载失败绝不格式化；不支持自动热插拔，更换卡应断电。
+
+## 1024 首的内存预算（尚未实机验收）
+
+每条路径最大 240 字节，固定记录含长度和终止符、对齐共 244 字节。路径表按
+16/32/.../1024 项增长，在 ESP32 上仅使用 MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT，
+不会退回内部 SRAM。满表 249856 字节（244 KiB）；旧/新/缓存回读校验同时满表
+为 749568 字节（732 KiB）。缓存加载按已校验的 count 一次分配，避免第三份表增长时叠加 realloc
+临时缓冲；扫描增长期间两份表及 realloc 旧/新缓冲上界约 610 KiB。
+这些数字仅是路径表预算，不是整机总内存，也不是可无条件分配成功的保证。
+
+分配失败返回错误，缓存加载不修改既有输出；扫描失败保留旧索引/缓存。
+扫描预算同步到 16384 个目录项，目录队列仍有独立 128 项/16 KiB 限制。
+文件名匹配改用固定栈缓冲折叠 ASCII，避免在主线程遍历 1024 首时反复分配
+短字符串；语义仍为包含匹配。MCP 每次结果仍最多 20 个/约 6 KB。

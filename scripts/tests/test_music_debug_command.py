@@ -21,12 +21,12 @@ int main() {
     using namespace TfMusic;
     assert(ParseDebugCommand("music-test stop").action == DebugAction::Stop);
     assert(ParseDebugCommand("music-test status").action == DebugAction::Status);
-    for (unsigned i = 0; i < 128; ++i) {
+    for (unsigned i = 0; i < 1024; ++i) {
         auto c = ParseDebugCommand("music-test play " + std::to_string(i));
         assert(c.action == DebugAction::Play && c.index == i);
     }
     for (auto s : {"", "play 0", "music-test play", "music-test play ",
-                   "music-test play -1", "music-test play +1", "music-test play 128",
+                   "music-test play -1", "music-test play +1", "music-test play 1024",
                    "music-test play 4294967296", "music-test play 1 trailing",
                    "music-test play /sdcard/a.mp3", "music-test stop now",
                    "music-test refresh", "music-test status\n", "music-test play 1;reboot"})

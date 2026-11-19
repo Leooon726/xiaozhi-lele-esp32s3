@@ -36,7 +36,7 @@ int main(int argc, char** argv) {
         TfMusic::Scan(argv[2], argv[2], 0, index);
         std::sort(index.paths.begin(), index.paths.end());
         std::cout << index.truncated << " " << index.path_bytes << "\n";
-        for (const auto& path : index.paths) std::cout << path << "\n";
+        for (const auto& path : index.paths) std::cout << path.c_str() << "\n";
     }
 }
 ''')
@@ -94,16 +94,25 @@ int main(int argc, char** argv) {
             self.assertEqual(self.run_index("format", "file.MP3").splitlines(), [".mp3", "1", "1"])
             self.assertEqual(self.run_index("format", "file.jpg").splitlines(), [".jpg", "0", "0"])
 
+    def test_more_than_old_cap_is_not_truncated(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for i in range(1024):
+                (root / (str(i) + ".MP3")).touch()
+            lines = self.run_index("scan", root).splitlines()
+            self.assertEqual(lines[0].split()[0], "0")
+            self.assertEqual(len(lines) - 1, 1024)
+
     def test_track_and_byte_caps(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            for i in range(150):
+            for i in range(1100):
                 (root / (str(i) + "a" * 100 + ".mp3")).touch()
             lines = self.run_index("scan", root).splitlines()
             flag, count_bytes = map(int, lines[0].split())
             self.assertEqual(flag, 1)
-            self.assertLessEqual(len(lines) - 1, 128)
-            self.assertLessEqual(count_bytes, 16 * 1024)
+            self.assertEqual(len(lines) - 1, 1024)
+            self.assertLessEqual(count_bytes, 256 * 1024)
 
     def test_missing_directory_and_deep_nesting(self):
         self.assertEqual(self.run_index("scan", "/no-such-music-folder").splitlines(), ["0 0"])

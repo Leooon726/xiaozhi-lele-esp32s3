@@ -6,7 +6,7 @@ import serial
 from serial.tools import list_ports
 os.umask(0o077)
 a=argparse.ArgumentParser();a.add_argument('action',choices=['play','stop','status']);a.add_argument('index',nargs='?',type=int,default=0);a.add_argument('--seconds',type=int,default=20);a.add_argument('--port');args=a.parse_args()
-assert 0<=args.index<128 and 1<=args.seconds<=120
+assert 0<=args.index<1024 and 1<=args.seconds<=120
 ports=[p.device for p in list_ports.comports() if p.vid==0x303a and p.pid==0x1001];ports=[args.port] if args.port else ports
 assert len(ports)==1, 'Use --port when zero or multiple ESP32 USB ports are present: '+str(ports)
 p=serial.Serial(port=None,baudrate=115200,timeout=.2,write_timeout=2);p.dtr=False;p.rts=False;p.port=ports[0]

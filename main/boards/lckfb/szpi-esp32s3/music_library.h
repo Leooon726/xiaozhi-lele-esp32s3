@@ -10,33 +10,33 @@
 #include <functional>
 #include <string>
 #include <vector>
+#include "music_paths.h"
 #include "sd_audio_path.h"
 
 namespace TfMusic {
-// Keep the index bounded alongside MultiNet7, AFE and the display.
-constexpr size_t kMaxTracks = 128;
-constexpr size_t kMaxPathBytes = 16 * 1024;
-constexpr int kMaxEntries = 4096;
-constexpr size_t kMaxPendingDirectories = 128;
-constexpr size_t kMaxPendingPathBytes = 16 * 1024;
-
-inline bool ValidPath(const std::string& path, const std::string& root = "/sdcard") {
-    return SdAudio::SafePath(path, root) && SdAudio::Candidate(path);
+inline bool ValidPath(std::string_view path, const std::string& root = "/sdcard") {
+    const std::string value(path);
+    return SdAudio::SafePath(value, root) && SdAudio::Candidate(value);
 }
 
-inline bool Matches(const std::string& path, const std::string& query) {
-    auto fold = [](std::string value) {
-        std::transform(value.begin(), value.end(), value.begin(),
-                       [](unsigned char c) { return std::tolower(c); });
-        return value;
-    };
-    return fold(path).find(fold(query)) != std::string::npos;
+inline bool Matches(std::string_view path, std::string_view query) {
+    if (path.size() > 240 || query.size() > path.size())
+        return false;
+    // Bounded stack buffers avoid heap churn during a 1024-track MCP search.
+    // Fold only ASCII; preserve Chinese UTF-8 bytes exactly.
+    char folded_path[240], folded_query[240];
+    auto fold = [](unsigned char c) -> char { return c >= 'A' && c <= 'Z' ? c + ('a' - 'A') : c; };
+    std::transform(path.begin(), path.end(), folded_path, fold);
+    std::transform(query.begin(), query.end(), folded_query, fold);
+    return std::string_view(folded_path, path.size())
+               .find(std::string_view(folded_query, query.size())) != std::string_view::npos;
 }
 
 struct Index {
-    std::vector<std::string> paths;
+    MusicPaths paths;
     bool truncated = false;
     bool io_error = false;
+    bool memory_error = false;
     int visited = 0;
     size_t path_bytes = 0;
 };
@@ -106,12 +106,17 @@ inline void Scan(const std::string& root, const std::string& directory, int, Ind
                     result.truncated = true;
                     continue;
                 }
+                if (!result.paths.push_back(path)) {
+                    result.memory_error = true;
+                    break;
+                }
                 result.path_bytes += path.size() + 1;
-                result.paths.push_back(std::move(path));
             }
         }
         if (closedir(dir) != 0)
             result.io_error = true;
+        if (result.memory_error)
+            return;
     }
     if (!pending.empty())
         result.truncated = true;

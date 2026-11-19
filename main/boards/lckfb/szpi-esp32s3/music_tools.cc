@@ -2,6 +2,7 @@
 #include "sdkconfig.h"
 #ifdef CONFIG_LICHUANG_TF_MUSIC
 
+#include <esp_heap_caps.h>
 #include <esp_log.h>
 #include <esp_timer.h>
 #include <dirent.h>
@@ -29,7 +30,7 @@
 namespace {
 std::mutex card_mutex;
 sdmmc_card_t* card = nullptr;
-std::vector<std::string> library;
+TfMusic::MusicPaths library;
 bool scanning = false;
 bool ready = false;
 bool library_truncated = false;
@@ -112,11 +113,13 @@ void RunScan(bool load_cache) {
     TfMusic::Index index;
     TfMusic::Scan(kMusicRoot, kMusicRoot, 0, index, checkpoint);
     std::sort(index.paths.begin(), index.paths.end());
-    if (index.io_error) {
-        ESP_LOGW(kTag, "Scan had an I/O error; keeping previous index and cache");
+    if (index.io_error || index.memory_error) {
+        ESP_LOGW(kTag, "Scan failed (I/O=%d memory=%d); keeping previous index and cache",
+                 index.io_error, index.memory_error);
         std::lock_guard<std::mutex> lock(card_mutex);
-        index_error =
-            "SD scan failed; previous index retained. Retry refresh or restart with card inserted.";
+        index_error = index.memory_error ? "Insufficient PSRAM; previous index retained."
+                                         : "SD scan failed; previous index retained. Retry refresh "
+                                           "or restart with card inserted.";
         scanning = false;
         manual_refresh = false;
         return;
@@ -131,6 +134,10 @@ void RunScan(bool load_cache) {
     }
     ESP_LOGI(kTag, "Scan complete: %u MP3 tracks, cache saved=%d", unsigned(index.paths.size()),
              saved);
+    ESP_LOGI(kTag, "Index PSRAM bytes=%u, free PSRAM=%u, largest PSRAM=%u",
+             unsigned(index.paths.storage_bytes()),
+             unsigned(heap_caps_get_free_size(MALLOC_CAP_SPIRAM)),
+             unsigned(heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM)));
     std::lock_guard<std::mutex> lock(card_mutex);
     library = std::move(index.paths);
     library_truncated = index.truncated;
@@ -184,14 +191,15 @@ void RunDebugCommand(TfMusic::DebugCommand command) {
             return;
         }
         if (command.action != TfMusic::DebugAction::Play) {
-            ESP_LOGW("TfMusicDebug", "Use: music-test play 0..127 | stop | status");
+            ESP_LOGW("TfMusicDebug", "Use: music-test play 0..%u | stop | status",
+                     unsigned(TfMusic::kMaxTracks - 1));
             return;
         }
         if (!ready || command.index >= library.size()) {
             ESP_LOGW("TfMusicDebug", "Index not ready or track out of range");
             return;
         }
-        path = library[command.index];
+        path = library[command.index].view();
     }
     if (app.GetDeviceState() != kDeviceStateIdle) {
         ESP_LOGW("TfMusicDebug", "Device busy; stop playback or wait for idle first");
@@ -233,7 +241,8 @@ void DebugSerialTask(void*) {
         vTaskDelete(nullptr);
         return;
     }
-    ESP_LOGI("TfMusicDebug", "USB ready: music-test play 0..127 | stop | status");
+    ESP_LOGI("TfMusicDebug", "USB ready: music-test play 0..%u | stop | status",
+             unsigned(TfMusic::kMaxTracks - 1));
     char line[64];
     size_t used = 0;
     bool overflow = false;
@@ -306,6 +315,8 @@ void InitializeLichuangMusicTools() {
                     cJSON_AddBoolToObject(result, "cache_saved", cache_saved);
                     cJSON_AddBoolToObject(result, "truncated", library_truncated);
                     cJSON_AddNumberToObject(result, "tracks", library.size());
+                    cJSON_AddNumberToObject(result, "max_tracks", TfMusic::kMaxTracks);
+                    cJSON_AddNumberToObject(result, "index_storage_bytes", library.storage_bytes());
                     cJSON_AddStringToObject(result, "index_source", index_source.c_str());
                     cJSON_AddStringToObject(result, "index_error", index_error.c_str());
                     return result;
@@ -332,7 +343,7 @@ void InitializeLichuangMusicTools() {
             const auto& query = p["query"].value<std::string>();
             size_t result_bytes = 0;
             for (const auto& path : library) {
-                if (!TfMusic::Matches(path.substr(8), query))
+                if (!TfMusic::Matches(path.view().substr(8), query))
                     continue;
                 if (cJSON_GetArraySize(files) >= 20 ||
                     result_bytes + path.size() * 2 + 140 > 6000) {
@@ -340,7 +351,7 @@ void InitializeLichuangMusicTools() {
                     break;
                 }
                 auto* item = cJSON_CreateObject();
-                cJSON_AddStringToObject(item, "name", path.substr(8).c_str());
+                cJSON_AddStringToObject(item, "name", path.c_str() + 8);
                 cJSON_AddStringToObject(item, "path", path.c_str());
                 cJSON_AddItemToArray(files, item);
                 result_bytes += path.size() * 2 + 140;
@@ -358,7 +369,9 @@ void InitializeLichuangMusicTools() {
             std::lock_guard<std::mutex> lock(card_mutex);
             auto path = p["path"].value<std::string>();
             if (!ready || !TfMusic::ValidPath(path) ||
-                std::find(library.begin(), library.end(), path) == library.end())
+                std::find_if(library.begin(), library.end(), [&](const auto& item) {
+                    return item.view() == path;
+                }) == library.end())
                 return std::unexpected("TF MP3 file not indexed; search the TF library first");
             if (!SdAudio::Playable(path))
                 return std::unexpected(

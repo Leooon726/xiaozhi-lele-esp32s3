@@ -32,21 +32,22 @@ inline uint32_t IndexHash(const Index& index, uint32_t generation) {
     for (const auto& path : index.paths) {
         hash = HashByte(hash, path.size() & 0xff);
         hash = HashByte(hash, path.size() >> 8);
-        for (uint8_t value : path)
+        for (uint8_t value : path.view())
             hash = HashByte(hash, value);
     }
     return hash;
 }
 inline bool ValidIndex(const Index& index, const std::string& root) {
-    if (index.io_error || index.paths.size() > kMaxTracks || index.path_bytes > kMaxPathBytes)
+    if (index.io_error || index.memory_error || index.paths.size() > kMaxTracks ||
+        index.path_bytes > kMaxPathBytes)
         return false;
     size_t bytes = 0;
-    std::string previous;
+    std::string_view previous;
     for (const auto& path : index.paths) {
-        if (!ValidPath(path, root) || (!previous.empty() && path <= previous))
+        if (!ValidPath(path.view(), root) || (!previous.empty() && path.view() <= previous))
             return false;
         bytes += path.size() + 1;
-        previous = path;
+        previous = path.view();
     }
     return bytes == index.path_bytes;
 }
@@ -69,6 +70,10 @@ inline bool LoadCache(const std::string& file, const std::string& root, Index& r
         expected_hash = Get32(header + 24);
         ok = count <= kMaxTracks && candidate.path_bytes <= kMaxPathBytes && flags <= 1;
     }
+    // Count is already bounded. Allocate once, avoiding a realloc transient
+    // while the old RAM index and the freshly scanned index are both alive.
+    if (ok)
+        ok = candidate.paths.reserve(count);
     size_t bytes = 0;
     for (uint32_t i = 0; ok && i < count; ++i) {
         uint8_t length[2];
@@ -81,7 +86,9 @@ inline bool LoadCache(const std::string& file, const std::string& root, Index& r
         ok = std::fread(path, 1, size, stream) == size;
         if (!ok)
             break;
-        candidate.paths.emplace_back(path, size);
+        ok = candidate.paths.emplace_back(path, size);
+        if (!ok)
+            break;
         bytes += size + 1;
     }
     if (ok)
