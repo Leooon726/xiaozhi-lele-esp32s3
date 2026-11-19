@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstdio>
 #include "application.h"
+#include "assistant_touch_region.h"
 #include "backlight.h"
 #include "display.h"
 #include "lvgl_theme.h"
@@ -206,6 +207,11 @@ void LeleMenu::Return() {
 }
 
 void LeleMenu::Poll() {
+    // Board construction precedes Application::Initialize/SetupUI. Installing
+    // the region in Start would leave it below the later full-screen widgets.
+    // Poll runs on the application task after initialization has completed.
+    if (!transfer_boot_ && !assistant_region_ && display_ && display_->IsSetupUICalled())
+        InitializeAssistantTouch();
     switch (action_.exchange(Action::None)) {
         case Action::DisplaySettings:
             ShowDisplaySettings();
@@ -300,15 +306,21 @@ void LeleMenu::HandleAssistantTouch(lv_event_t* event) {
     const bool enabled = !IsOpen() && !transfer_boot_;
     switch (code) {
         case LV_EVENT_PRESSED:
+            ESP_LOGI("LeleTouch", "Press x=%ld y=%ld enabled=%d", long(point.x), long(point.y),
+                     enabled);
             assistant_tap_.Begin(point.x, point.y, lv_tick_get(), enabled);
             break;
         case LV_EVENT_PRESSING:
             assistant_tap_.Move(point.x, point.y);
             break;
-        case LV_EVENT_RELEASED:
-            if (assistant_tap_.End(point.x, point.y, lv_tick_get(), enabled))
+        case LV_EVENT_RELEASED: {
+            const bool accepted = assistant_tap_.End(point.x, point.y, lv_tick_get(), enabled);
+            ESP_LOGI("LeleTouch", "Release x=%ld y=%ld accepted=%d", long(point.x), long(point.y),
+                     accepted);
+            if (accepted)
                 assistant_tap_pending_ = true;
             break;
+        }
         case LV_EVENT_PRESS_LOST:
             assistant_tap_.Cancel();
             break;
@@ -324,25 +336,26 @@ void LeleMenu::InitializeAssistantTouch() {
     }
     // Normal assistant screen only, below top-layer menus. The fixed central
     // region includes both bitmap and font emotions without changing rendering.
-    auto* region = lv_obj_create(lv_screen_active());
-    lv_obj_remove_style_all(region);
-    lv_obj_set_size(region, lv_pct(60), lv_pct(50));
-    lv_obj_center(region);
-    lv_obj_set_style_bg_opa(region, LV_OPA_TRANSP, 0);
-    lv_obj_remove_flag(region, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_flag(region, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_flag(region, LV_OBJ_FLAG_PRESS_LOCK);
-    lv_obj_add_event_cb(
-        region,
+    auto* region = EnsureAssistantTouchRegion(
+        display_ && display_->IsSetupUICalled(), transfer_boot_, assistant_region_,
         [](lv_event_t* event) {
             static_cast<LeleMenu*>(lv_event_get_user_data(event))->HandleAssistantTouch(event);
         },
-        LV_EVENT_ALL, this);
+        this);
+    if (!region) {
+        lvgl_port_unlock();
+        return;
+    }
+    assistant_region_ = region;
+    lv_obj_update_layout(region);
+    lv_area_t bounds;
+    lv_obj_get_coords(region, &bounds);
+    ESP_LOGI("LeleTouch", "Region ready after SetupUI (%ld,%ld)-(%ld,%ld)", long(bounds.x1),
+             long(bounds.y1), long(bounds.x2), long(bounds.y2));
     lvgl_port_unlock();
 }
 
 void LeleMenu::Start() {
-    InitializeAssistantTouch();
     esp_timer_create_args_t config = {};
     config.callback = [](void* arg) {
         auto* menu = static_cast<LeleMenu*>(arg);

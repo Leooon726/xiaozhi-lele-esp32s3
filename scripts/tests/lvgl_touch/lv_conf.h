@@ -1,0 +1,8 @@
+#pragma once
+#define LV_COLOR_DEPTH 16
+#define LV_USE_OS 0
+#define LV_USE_LOG 0
+#define LV_USE_THORVG_INTERNAL 0
+#define LV_USE_THORVG_EXTERNAL 0
+#define LV_BUILD_EXAMPLES 0
+#define LV_BUILD_DEMOS 0

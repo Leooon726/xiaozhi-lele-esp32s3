@@ -30,7 +30,8 @@ SD-wide MP3 indexing with a dual-slot SD cache, and a local USB diagnostic entry
   The menu also has Display settings (light/dark and 5–100% brightness), flashed; basic switching and
   reboot persistence accepted by the user. Read docs/lele/DISPLAY.md. Pass display/backlight explicitly during
   board construction; never recursively call Board::GetInstance from that path.
-  Assistant-area tapping is flashed (457e126), touch/voice acceptance pending;
+  Assistant-area tapping in flashed 457e126 failed all three user tests;
+  the source defers region creation until SetupUI completes (fix not flashed);
   read docs/lele/TOUCH.md.
   Keep gesture callbacks audio-free and dispatch only on the normal main loop.
 - Do not format the SD card, assume a music/ directory, or restore stock automatic

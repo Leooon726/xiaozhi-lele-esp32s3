@@ -47,6 +47,7 @@ private:
     esp_timer_handle_t timer_ = nullptr;
     lv_obj_t* overlay_ = nullptr;
     lv_obj_t* message_ = nullptr;
+    lv_obj_t* assistant_region_ = nullptr;
     AssistantTap assistant_tap_;
     std::atomic<bool> assistant_tap_pending_{false};
     Display* display_ = nullptr;
