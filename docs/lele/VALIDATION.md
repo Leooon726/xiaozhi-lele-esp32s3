@@ -94,3 +94,11 @@ largest 1048576 字节。该观测不代表 1024 首满容量或语音/播放并
 未观察到 panic。串口已关闭，未进入 MSC，未操作 SD 卡歌曲。
 用户明确选择自行测试传输流程；临时 CDC/菜单自动化扩展已撤回，未烧入。
 当前正常模式的原生串口仍可用，传输模式不保留 CDC 调试串口。
+
+随后用户进入文件传输模式并确认 Finder 可见 SD。主机实读 USB FAT32 卷目录，
+找到 340 首 MP3；LLMIDX02 缓存 generation 15 的校验、排序、数量通过，340 条
+与真实路径完全一致（缺失 0，未索引 0，缓存 truncated=false）。曲库列表只保存
+本机 .local/exports，不公开文件名。未写入或改动用户歌曲，也未推出设备。
+Mac 当前 mount 为 read-only；diskutil 显示 WritableMedia=true、WritableVolume=false。
+底层可写不代表卷已可写，写入/改名仍未验收。只读挂载原因未查明，不能据此
+认定 SD 损坏或自行 fsck 修复；正常退出返回助手也仍待用户测试。
