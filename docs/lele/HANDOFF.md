@@ -108,7 +108,8 @@ Theme: Light/Dark、Brightness -/+、百分比及 Back。复用原主题黑底�
 
 这一版包含先前 9e3542e 传输模式恢复修复。用户当次授权后已刷入 4bd6dca，
 16 MiB 完整备份及设备校验、五文件烧录校验、启动前 NVS 一致性均通过。
-启动加载 340 首缓存 generation 14；35 秒日志无 panic/反复重启，但找不到
-已保存 Wi-Fi（No AP found），状态仍 starting，scanning=1 等待空闲。串口已释放，
-尚未证明正常 idle、扫描完成或菜单交互。已请用户恢复网络或选择先测显示设置；
-USB 传输入口当前要求 idle/notifying，不能将联网等待误判为菜单挂死。
+初次启动加载 340 首缓存 generation 14，但找不到已保存 Wi-Fi（No AP found）。
+用户随后完成配网；再次启动加载 340 首缓存 generation 15，约 4.7 秒进入 idle，
+20.9 秒扫描完成仍为 340 首、cache saved=1，28.5 秒 status 为 ready=1 /
+scanning=0 / idle。未见 panic/反复重启。串口已释放，显示和 USB 交互仍待用户
+操作验收；已给出配色/亮度重启记忆、推出 Return、推出后 RESET 返回的测试步骤。

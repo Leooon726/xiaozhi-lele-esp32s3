@@ -161,3 +161,10 @@ No AP found，状态 starting；scanning=1 尚未完成。已释放串口并请�
 显示页、配色/亮度及重启记忆、传输推出/复位恢复均待用户实际操作；未自动
 进入 MSC 或改动 SD 文件。用户此前选择另一台允许 USB 写入的电脑验证读写，
 本机主机策略限制的结论保持。当前设备应用为 4bd6dca，不再是旧 9ce35df。
+
+用户随后确认已完成配网。再次串口采集：启动加载 340 首缓存 generation 15，
+约 4.7 秒进入 idle，20.9 秒 Scan complete: 340 MP3 tracks, cache saved=1；
+28.5 秒 ready=1 / tracks=340 / scanning=0 / state=idle。扫描末尾路径表 124928
+字节，PSRAM free 1088608、largest 983040；未见 panic/反复重启。串口已释放。
+该结果补齐联网、正常启动和缓存刷新验证，尚不代表显示设置或 USB 退出通过。
+已请用户测试浅/深色、亮度、重启记忆及推出 Return、推出后 RESET 回助手。
