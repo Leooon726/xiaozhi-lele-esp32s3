@@ -47,7 +47,7 @@ private:
         AssistantTap tap;
         bool released_tap = false;
     };
-    Binding bindings_[8]{};
+    Binding bindings_[TfMusic::kBrowserPageSize + 4]{};
     std::atomic<Action> action_{Action::None};
     std::atomic<bool> open_{false};
     std::atomic<bool> poll_queued_{false};

@@ -52,7 +52,7 @@ int main() {
     assert(lv_indev_search_obj(screen, &center) == region);
     lv_obj_delete(overlay);
 
-    // Production song-list layout and button factory: four rows and four
+    // Production song-list layout and button factory: five rows and four
     // footer controls fit the 320x240 screen, including the 28px text height.
     overlay = lv_obj_create(lv_layer_top());
     lv_obj_set_size(overlay, lv_pct(100), lv_pct(100));
@@ -62,19 +62,13 @@ int main() {
     lv_obj_set_style_pad_row(overlay, 4, 0);
     lv_obj_set_flex_flow(overlay, LV_FLEX_FLOW_COLUMN);
     auto* title = lv_label_create(overlay);
-    lv_label_set_text(title, "Songs 1/256 (1024)");
+    lv_label_set_text(title, "Songs 1/205 (1024)");
     lv_obj_set_height(title, 28);
-    auto* status = lv_label_create(overlay);
-    lv_obj_set_height(status, 28);
     auto* rows = CreateSongListRows(overlay);
-    lv_obj_t* buttons[4];
+    lv_obj_t* buttons[5];
     for (auto& button : buttons) {
         button = CreateLeleButton(rows, "Long song name for layout testing", true);
-        lv_obj_set_height(button, 30);
-        auto* label = lv_obj_get_child(button, 0);
-        lv_obj_set_width(label, lv_pct(96));
-        lv_obj_set_height(label, 28);
-        lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+        ConfigureSongListButton(button, nullptr);
     }
     auto* footer = CreateSongListFooter(overlay);
     const char* controls[] = {"Prev", "Next", "Stop", "Back"};
@@ -94,6 +88,9 @@ int main() {
         assert(area.y1 >= 0 && area.y2 < footer_area.y1);
         assert(area.x1 >= 0 && area.x2 < 320);
         assert(lv_obj_get_height(button) == 30);
+        auto* label = lv_obj_get_child(button, 0);
+        assert(lv_obj_get_height(label) == 28);
+        assert(lv_label_get_long_mode(label) == LV_LABEL_LONG_SCROLL_CIRCULAR);
         lv_point_t point{(area.x1 + area.x2) / 2, (area.y1 + area.y2) / 2};
         assert(lv_indev_search_obj(lv_layer_top(), &point) == button);
     }

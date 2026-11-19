@@ -165,13 +165,7 @@ void LeleMenu::ShowSongs(size_t offset) {
     song_page_ = std::move(page);
     song_font_ = display_ && display_->GetTheme() ? display_->GetTheme()->GetTextFont() : nullptr;
     lv_obj_set_style_border_width(overlay_, 0, 0);
-    auto* title = lv_label_create(overlay_);
-    char heading[60];
-    const size_t pages = std::max(size_t(1), (song_page_.total + 3) / 4);
-    snprintf(heading, sizeof(heading), "Songs %u/%u (%u)", unsigned(song_page_.offset / 4 + 1),
-             unsigned(pages), unsigned(song_page_.total));
-    lv_label_set_text(title, heading);
-    lv_obj_set_height(title, 28);
+    // One header only: status/details share it instead of taking a song row.
     message_ = lv_label_create(overlay_);
     lv_obj_set_size(message_, lv_pct(100), 28);
     lv_label_set_long_mode(message_, LV_LABEL_LONG_SCROLL_CIRCULAR);
@@ -183,12 +177,7 @@ void LeleMenu::ShowSongs(size_t offset) {
         const auto name =
             std::to_string(song_page_.offset + row + 1) + ". " + TfMusic::BrowserName(path);
         auto* button = AddButton(name.c_str(), Action::PlaySong, row, rows, path);
-        lv_obj_set_height(button, 30);
-        auto* label = lv_obj_get_child(button, 0);
-        lv_obj_set_width(label, lv_pct(96));
-        lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
-        if (song_font_)
-            lv_obj_set_style_text_font(label, song_font_->font(), 0);
+        ConfigureSongListButton(button, song_font_ ? song_font_->font() : nullptr);
         if (!song_page_.ready || song_page_.blocked)
             lv_obj_add_state(button, LV_STATE_DISABLED);
     }
@@ -197,7 +186,7 @@ void LeleMenu::ShowSongs(size_t offset) {
     const Action actions[] = {Action::PreviousSongs, Action::NextSongs, Action::StopSong,
                               Action::MainMenu};
     for (unsigned i = 0; i < 4; ++i) {
-        auto* button = AddButton(names[i], actions[i], i + 4, footer);
+        auto* button = AddButton(names[i], actions[i], i + TfMusic::kBrowserPageSize, footer);
         lv_obj_set_width(button, 0);
         lv_obj_set_height(button, 30);
         lv_obj_set_flex_grow(button, 1);
@@ -235,9 +224,15 @@ void LeleMenu::UpdateSongStatus() {
             text += " | limited index";
         if (!song_page_.error.empty())
             text += " | index warning";
-        text += song_detail_.empty() ? " | tap play; hold details" : ": " + song_detail_.substr(8);
+        if (!song_detail_.empty())
+            text += ": " + song_detail_.substr(8);
     }
-    Message(text.c_str());
+    char heading[60];
+    const auto size = TfMusic::kBrowserPageSize;
+    const size_t pages = std::max(size_t(1), (song_page_.total + size - 1) / size);
+    snprintf(heading, sizeof(heading), "Songs %u/%u (%u)", unsigned(song_page_.offset / size + 1),
+             unsigned(pages), unsigned(song_page_.total));
+    Message((std::string(heading) + (text.empty() ? "" : " | " + text)).c_str());
 }
 
 void LeleMenu::PlaySong(bool details) {
@@ -403,12 +398,12 @@ void LeleMenu::Poll() {
             ShowSongs(0);
             break;
         case Action::PreviousSongs:
-            if (songs_page_ && song_page_.offset >= 4)
-                ShowSongs(song_page_.offset - 4);
+            if (songs_page_ && song_page_.offset >= TfMusic::kBrowserPageSize)
+                ShowSongs(song_page_.offset - TfMusic::kBrowserPageSize);
             break;
         case Action::NextSongs:
-            if (songs_page_ && song_page_.offset + 4 < song_page_.total)
-                ShowSongs(song_page_.offset + 4);
+            if (songs_page_ && song_page_.offset + TfMusic::kBrowserPageSize < song_page_.total)
+                ShowSongs(song_page_.offset + TfMusic::kBrowserPageSize);
             break;
         case Action::PlaySong:
             PlaySong(false);

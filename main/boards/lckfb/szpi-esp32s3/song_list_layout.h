@@ -34,3 +34,13 @@ inline lv_obj_t* CreateSongListFooter(lv_obj_t* overlay) {
     lv_obj_remove_flag(footer, LV_OBJ_FLAG_SCROLLABLE);
     return footer;
 }
+
+inline void ConfigureSongListButton(lv_obj_t* button, const lv_font_t* font) {
+    lv_obj_set_height(button, 30);
+    auto* label = lv_obj_get_child(button, 0);
+    lv_obj_set_size(label, lv_pct(96), 28);
+    lv_label_set_long_mode(label, LV_LABEL_LONG_SCROLL_CIRCULAR);
+    if (font)
+        lv_obj_set_style_text_font(label, font, 0);
+    lv_obj_center(label);
+}

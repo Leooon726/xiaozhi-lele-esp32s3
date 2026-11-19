@@ -7,7 +7,7 @@
 #include "music_paths.h"
 
 namespace TfMusic {
-constexpr size_t kBrowserPageSize = 4;
+constexpr size_t kBrowserPageSize = 5;
 struct BrowserPage {
     std::array<std::string, kBrowserPageSize> paths;
     size_t offset = 0, count = 0, total = 0;

@@ -41,9 +41,9 @@ int main() {
         assert(library.push_back("/sdcard/folder/song"+std::to_string(i)+".mp3"));
     ready=true;
     auto first=GetLichuangMusicPage(0);
-    assert(first.count==4 && first.total==1024 && first.offset==0 && first.revision==1);
+    assert(first.count==5 && first.total==1024 && first.offset==0 && first.revision==1);
     auto aligned=GetLichuangMusicPage(7);
-    assert(aligned.offset==4 && aligned.count==4 && aligned.paths[0]=="/sdcard/folder/song4.mp3");
+    assert(aligned.offset==5 && aligned.count==5 && aligned.paths[0]=="/sdcard/folder/song5.mp3");
     auto last=GetLichuangMusicPage(std::numeric_limits<size_t>::max());
     assert(last.offset==1020 && last.count==4 && last.paths[3]=="/sdcard/folder/song1023.mp3");
     const auto selected=first.paths[0];
@@ -62,7 +62,7 @@ int main() {
     TfMusic::MusicPaths replacement;
     assert(replacement.push_back("/sdcard/new.mp3"));
     library=std::move(replacement);++library_revision;
-    assert(first.paths[0]==selected); // snapshot owns its four paths
+    assert(first.paths[0]==selected); // snapshot owns its five paths
     assert(!RequestLichuangMusicPath(selected));
     auto shrunk=GetLichuangMusicPage(last.offset);
     assert(shrunk.total==1 && shrunk.offset==0 && shrunk.count==1 && shrunk.revision==2);
