@@ -30,6 +30,7 @@ public:
         return accepted;
     }
     void Cancel() { active_ = false; }
+    bool Stationary() const { return active_ && !moved_; }
 
 private:
     bool active_ = false;

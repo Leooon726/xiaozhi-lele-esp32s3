@@ -21,7 +21,7 @@ SD-wide MP3 indexing with a dual-slot SD cache, and a local USB diagnostic entry
 - Preserve PSRAM MP3 task stacks and matching WithCaps deletion; do not restore
   the failing 32 KiB internal SRAM stack. Do not remove USB secondary-console
   registration/RX initialization from the debug entry.
-- Current firmware (menu/MSC interaction not yet hardware-accepted): CONFIG_LICHUANG_USB_STORAGE replaces BOOT long-press
+- Current firmware (USB SD basic functionality accepted by the user): CONFIG_LICHUANG_USB_STORAGE replaces BOOT long-press
   playback with a 2-second menu and reboot-isolated MSC mode. Read
   docs/lele/USB_TRANSFER.md before touching USB, ownership or persistent mode.
   Keep transfer boot before camera/music/audio initialization. Consume the one-shot
@@ -35,6 +35,8 @@ SD-wide MP3 indexing with a dual-slot SD cache, and a local USB diagnostic entry
   the earlier 457e126 region was covered by later full-screen widgets;
   read docs/lele/TOUCH.md.
   Keep gesture callbacks audio-free and dispatch only on the normal main loop.
+  Songs menu is implemented but not flashed; read docs/lele/SONG_LIST.md. Keep
+  page snapshots bounded and select/revalidate paths rather than mutable indices.
 - Do not format the SD card, assume a music/ directory, or restore stock automatic
   OTA in music variants. Keep debug controls behind their separate Kconfig flag.
 - Update HANDOFF/VALIDATION when behavior or physical evidence changes. Distinguish

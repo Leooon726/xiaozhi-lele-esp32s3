@@ -32,6 +32,7 @@ namespace {
 std::mutex card_mutex;
 sdmmc_card_t* card = nullptr;
 TfMusic::MusicPaths library;
+uint32_t library_revision = 0;  // Access only under card_mutex, including UI snapshots.
 bool scanning = false;
 bool storage_pending = false;
 bool ready = false;
@@ -85,6 +86,7 @@ void RunScan(bool load_cache) {
                      unsigned(selected.paths.size()), static_cast<unsigned long>(cache_generation));
             std::lock_guard<std::mutex> lock(card_mutex);
             library = std::move(selected.paths);
+            ++library_revision;
             library_truncated = selected.truncated;
             ready = true;
             cache_saved = true;
@@ -142,6 +144,7 @@ void RunScan(bool load_cache) {
              unsigned(heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM)));
     std::lock_guard<std::mutex> lock(card_mutex);
     library = std::move(index.paths);
+    ++library_revision;
     library_truncated = index.truncated;
     ready = true;
     cache_saved = saved;
@@ -276,6 +279,28 @@ void DebugSerialTask(void*) {
 }
 #endif
 }  // namespace
+
+TfMusic::BrowserPage GetLichuangMusicPage(size_t offset) {
+    std::lock_guard<std::mutex> lock(card_mutex);
+    auto page = TfMusic::CopyBrowserPage(library, offset, library_revision);
+    page.ready = ready;
+    page.scanning = scanning;
+    page.truncated = library_truncated;
+    page.blocked = storage_pending;
+    page.error = index_error;
+    return page;
+}
+
+bool RequestLichuangMusicPath(const std::string& path) {
+    {
+        std::lock_guard<std::mutex> lock(card_mutex);
+        if (storage_pending || !ready || !TfMusic::ValidPath(path) || !SdAudio::Playable(path) ||
+            !TfMusic::HasBrowserPath(library, path))
+            return false;
+    }
+    Application::GetInstance().RequestMusic(path);
+    return true;
+}
 
 #ifdef CONFIG_LICHUANG_TF_MUSIC_DEBUG
 void ToggleLichuangMusicDebug() {

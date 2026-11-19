@@ -1,5 +1,6 @@
 #include <cassert>
 #include "assistant_touch_region.h"
+#include "song_list_layout.h"
 
 static void Event(lv_event_t*) {}
 
@@ -49,6 +50,60 @@ int main() {
     lv_obj_add_flag(overlay, LV_OBJ_FLAG_HIDDEN);
     assert(!lv_indev_search_obj(lv_layer_top(), &center));
     assert(lv_indev_search_obj(screen, &center) == region);
+    lv_obj_delete(overlay);
+
+    // Production song-list layout and button factory: four rows and four
+    // footer controls fit the 320x240 screen, including the 28px text height.
+    overlay = lv_obj_create(lv_layer_top());
+    lv_obj_set_size(overlay, lv_pct(100), lv_pct(100));
+    lv_obj_center(overlay);
+    lv_obj_set_style_border_width(overlay, 0, 0);
+    lv_obj_set_style_pad_all(overlay, 6, 0);
+    lv_obj_set_style_pad_row(overlay, 4, 0);
+    lv_obj_set_flex_flow(overlay, LV_FLEX_FLOW_COLUMN);
+    auto* title = lv_label_create(overlay);
+    lv_label_set_text(title, "Songs 1/256 (1024)");
+    lv_obj_set_height(title, 28);
+    auto* status = lv_label_create(overlay);
+    lv_obj_set_height(status, 28);
+    auto* rows = CreateSongListRows(overlay);
+    lv_obj_t* buttons[4];
+    for (auto& button : buttons) {
+        button = CreateLeleButton(rows, "Long song name for layout testing", true);
+        lv_obj_set_height(button, 30);
+        auto* label = lv_obj_get_child(button, 0);
+        lv_obj_set_width(label, lv_pct(96));
+        lv_obj_set_height(label, 28);
+        lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+    }
+    auto* footer = CreateSongListFooter(overlay);
+    const char* controls[] = {"Prev", "Next", "Stop", "Back"};
+    for (const char* name : controls) {
+        auto* button = CreateLeleButton(footer, name, true);
+        lv_obj_set_width(button, 0);
+        lv_obj_set_height(button, 30);
+        lv_obj_set_flex_grow(button, 1);
+    }
+    lv_obj_update_layout(overlay);
+    lv_area_t footer_area;
+    lv_obj_get_coords(footer, &footer_area);
+    assert(footer_area.y2 < 240 && footer_area.y1 > 0);
+    for (auto* button : buttons) {
+        lv_area_t area;
+        lv_obj_get_coords(button, &area);
+        assert(area.y1 >= 0 && area.y2 < footer_area.y1);
+        assert(area.x1 >= 0 && area.x2 < 320);
+        assert(lv_obj_get_height(button) == 30);
+        lv_point_t point{(area.x1 + area.x2) / 2, (area.y1 + area.y2) / 2};
+        assert(lv_indev_search_obj(lv_layer_top(), &point) == button);
+    }
+    for (unsigned i = 0; i < 4; ++i) {
+        auto* button = lv_obj_get_child(footer, i);
+        lv_area_t area;
+        lv_obj_get_coords(button, &area);
+        assert(area.y2 < 240 && area.x1 >= 0 && area.x2 < 320);
+        assert(lv_obj_get_width(button) >= 60);
+    }
     lv_display_delete(display);
     lv_deinit();
 }

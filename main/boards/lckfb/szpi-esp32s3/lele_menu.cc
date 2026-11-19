@@ -14,6 +14,7 @@
 #include "lvgl_theme.h"
 #include "music_storage.h"
 #include "settings.h"
+#include "song_list_layout.h"
 #include "usb_transfer.h"
 
 LV_FONT_DECLARE(BUILTIN_TEXT_FONT);
@@ -28,16 +29,20 @@ bool LeleMenu::IsDark() const {
     return theme && theme->name() == "dark";
 }
 
-void LeleMenu::AddButton(const char* label, Action action, unsigned slot) {
-    auto* button = lv_button_create(overlay_);
-    lv_obj_set_size(button, lv_pct(100), 32);
-    lv_obj_set_style_pad_all(button, 0, 0);
-    lv_obj_set_style_bg_color(button, lv_color_hex(IsDark() ? 0x303030 : 0xDDDDDD), 0);
-    lv_obj_set_style_text_color(button, IsDark() ? lv_color_white() : lv_color_black(), 0);
-    auto* caption = lv_label_create(button);
-    lv_label_set_text(caption, label);
-    lv_obj_center(caption);
-    bindings_[slot] = {this, action};
+lv_obj_t* LeleMenu::AddButton(const char* label, Action action, unsigned slot, lv_obj_t* parent,
+                              const std::string& path) {
+    auto* button = CreateLeleButton(parent ? parent : overlay_, label, IsDark());
+    bindings_[slot] = {this, action, path};
+    if (action == Action::PlaySong) {
+        lv_obj_add_event_cb(
+            button,
+            [](lv_event_t* event) {
+                auto* binding = static_cast<Binding*>(lv_event_get_user_data(event));
+                binding->menu->HandleSongTouch(event, binding);
+            },
+            LV_EVENT_ALL, &bindings_[slot]);
+        return button;
+    }
     lv_obj_add_event_cb(
         button,
         [](lv_event_t* event) {
@@ -45,29 +50,68 @@ void LeleMenu::AddButton(const char* label, Action action, unsigned slot) {
             binding->menu->action_.store(binding->action);
         },
         LV_EVENT_CLICKED, &bindings_[slot]);
+    return button;
 }
 
-void LeleMenu::Show(const char* text, bool transfer) {
-    if (!lvgl_port_lock(1000))
+void LeleMenu::HandleSongTouch(lv_event_t* event, Binding* binding) {
+    const auto code = lv_event_get_code(event);
+    if (code == LV_EVENT_SHORT_CLICKED || code == LV_EVENT_LONG_PRESSED) {
+        const bool details = code == LV_EVENT_LONG_PRESSED;
+        if ((details && binding->tap.Stationary()) || (!details && binding->released_tap)) {
+            pending_song_ = binding->path;
+            action_ = details ? Action::SongDetails : Action::PlaySong;
+        }
+        binding->released_tap = false;
         return;
+    }
+    if (code != LV_EVENT_PRESSED && code != LV_EVENT_PRESSING && code != LV_EVENT_RELEASED &&
+        code != LV_EVENT_PRESS_LOST)
+        return;
+    auto* input = lv_indev_active();
+    if (!input) {
+        binding->tap.Cancel();
+        return;
+    }
+    lv_point_t point;
+    lv_indev_get_point(input, &point);
+    if (code == LV_EVENT_PRESSED) {
+        binding->released_tap = false;
+        binding->tap.Begin(point.x, point.y, lv_tick_get(), true);
+    } else if (code == LV_EVENT_PRESSING) {
+        binding->tap.Move(point.x, point.y);
+    } else if (code == LV_EVENT_RELEASED) {
+        binding->released_tap = binding->tap.End(point.x, point.y, lv_tick_get(), true);
+    } else {
+        binding->tap.Cancel();
+        binding->released_tap = false;
+    }
+}
+
+void LeleMenu::ResetOverlay() {
     assistant_tap_.Cancel();
     assistant_tap_pending_ = false;
     // Rebuild only on page navigation, never from a touch callback. Input
     // callbacks merely queue an action, so deleted controls cannot be reused.
     if (overlay_)
         lv_obj_delete(overlay_);
+    overlay_ = lv_obj_create(lv_layer_top());
+    lv_obj_set_size(overlay_, lv_pct(100), lv_pct(100));
+    lv_obj_center(overlay_);
+    lv_obj_remove_flag(overlay_, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_bg_color(overlay_, IsDark() ? lv_color_black() : lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(overlay_, LV_OPA_COVER, 0);
+    lv_obj_set_style_text_color(overlay_, IsDark() ? lv_color_white() : lv_color_black(), 0);
+    lv_obj_set_style_text_font(overlay_, &BUILTIN_TEXT_FONT, 0);
+    lv_obj_set_style_pad_all(overlay_, 6, 0);
+    lv_obj_set_style_pad_row(overlay_, 4, 0);
+    lv_obj_set_flex_flow(overlay_, LV_FLEX_FLOW_COLUMN);
+}
+
+void LeleMenu::Show(const char* text, bool transfer) {
+    if (!lvgl_port_lock(1000))
+        return;
+    ResetOverlay();
     {
-        overlay_ = lv_obj_create(lv_layer_top());
-        lv_obj_set_size(overlay_, lv_pct(100), lv_pct(100));
-        lv_obj_center(overlay_);
-        lv_obj_remove_flag(overlay_, LV_OBJ_FLAG_SCROLLABLE);
-        lv_obj_set_style_bg_color(overlay_, IsDark() ? lv_color_black() : lv_color_white(), 0);
-        lv_obj_set_style_bg_opa(overlay_, LV_OPA_COVER, 0);
-        lv_obj_set_style_text_color(overlay_, IsDark() ? lv_color_white() : lv_color_black(), 0);
-        lv_obj_set_style_text_font(overlay_, &BUILTIN_TEXT_FONT, 0);
-        lv_obj_set_style_pad_all(overlay_, 6, 0);
-        lv_obj_set_style_pad_row(overlay_, 4, 0);
-        lv_obj_set_flex_flow(overlay_, LV_FLEX_FLOW_COLUMN);
         auto* title = lv_label_create(overlay_);
         lv_label_set_text(
             title, transfer ? "USB File Transfer" : (display_settings_ ? "Display" : "Lele Menu"));
@@ -85,7 +129,8 @@ void LeleMenu::Show(const char* text, bool transfer) {
         } else {
             AddButton("USB File Transfer", Action::Enter, 0);
             AddButton("Display", Action::DisplaySettings, 1);
-            AddButton("Back", Action::Close, 2);
+            AddButton("Songs", Action::Songs, 2);
+            AddButton("Back", Action::Close, 3);
         }
     }
     lv_label_set_text(message_, text);
@@ -98,11 +143,150 @@ void LeleMenu::ShowDisplaySettings() {
     if (preparing_ || transfer_boot_ || restart_to_transfer_)
         return;
     display_settings_ = true;
+    songs_page_ = false;
     Settings settings("display", false);
     brightness_ = std::clamp<int32_t>(settings.GetInt("brightness", 75), 5, 100);
     char text[40];
     snprintf(text, sizeof(text), "Brightness: %d%%", brightness_);
     Show(text);
+}
+
+void LeleMenu::ShowSongs(size_t offset) {
+    if (preparing_ || transfer_boot_ || restart_to_transfer_)
+        return;
+    auto page = GetLichuangMusicPage(offset);  // Releases card mutex before LVGL lock.
+    if (!lvgl_port_lock(1000))
+        return;
+    if (!songs_page_ || page.offset != song_page_.offset || page.revision != song_page_.revision)
+        song_detail_.clear();
+    ResetOverlay();
+    songs_page_ = true;
+    display_settings_ = false;
+    song_page_ = std::move(page);
+    song_font_ = display_ && display_->GetTheme() ? display_->GetTheme()->GetTextFont() : nullptr;
+    lv_obj_set_style_border_width(overlay_, 0, 0);
+    auto* title = lv_label_create(overlay_);
+    char heading[60];
+    const size_t pages = std::max(size_t(1), (song_page_.total + 3) / 4);
+    snprintf(heading, sizeof(heading), "Songs %u/%u (%u)", unsigned(song_page_.offset / 4 + 1),
+             unsigned(pages), unsigned(song_page_.total));
+    lv_label_set_text(title, heading);
+    lv_obj_set_height(title, 28);
+    message_ = lv_label_create(overlay_);
+    lv_obj_set_size(message_, lv_pct(100), 28);
+    lv_label_set_long_mode(message_, LV_LABEL_LONG_SCROLL_CIRCULAR);
+    if (song_font_)
+        lv_obj_set_style_text_font(message_, song_font_->font(), 0);
+    auto* rows = CreateSongListRows(overlay_);
+    for (size_t row = 0; row < song_page_.count; ++row) {
+        const auto& path = song_page_.paths[row];
+        const auto name =
+            std::to_string(song_page_.offset + row + 1) + ". " + TfMusic::BrowserName(path);
+        auto* button = AddButton(name.c_str(), Action::PlaySong, row, rows, path);
+        lv_obj_set_height(button, 30);
+        auto* label = lv_obj_get_child(button, 0);
+        lv_obj_set_width(label, lv_pct(96));
+        lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+        if (song_font_)
+            lv_obj_set_style_text_font(label, song_font_->font(), 0);
+        if (!song_page_.ready || song_page_.blocked)
+            lv_obj_add_state(button, LV_STATE_DISABLED);
+    }
+    auto* footer = CreateSongListFooter(overlay_);
+    const char* names[] = {"Prev", "Next", "Stop", "Back"};
+    const Action actions[] = {Action::PreviousSongs, Action::NextSongs, Action::StopSong,
+                              Action::MainMenu};
+    for (unsigned i = 0; i < 4; ++i) {
+        auto* button = AddButton(names[i], actions[i], i + 4, footer);
+        lv_obj_set_width(button, 0);
+        lv_obj_set_height(button, 30);
+        lv_obj_set_flex_grow(button, 1);
+        if ((i == 0 && !song_page_.offset) ||
+            (i == 1 && song_page_.offset + song_page_.count >= song_page_.total))
+            lv_obj_add_state(button, LV_STATE_DISABLED);
+    }
+    open_ = true;
+    lvgl_port_unlock();
+    song_polled_at_ = uint32_t(esp_timer_get_time() / 1000);
+    ESP_LOGI("LeleSongs", "Page offset=%u rows=%u total=%u revision=%lu",
+             unsigned(song_page_.offset), unsigned(song_page_.count), unsigned(song_page_.total),
+             static_cast<unsigned long>(song_page_.revision));
+    UpdateSongStatus();
+}
+
+void LeleMenu::UpdateSongStatus() {
+    song_status_ = Application::GetInstance().GetMusicStatus();
+    std::string text;
+    if (song_page_.blocked)
+        text = "Storage unavailable during transfer";
+    else if (!song_page_.ready)
+        text = !song_page_.error.empty()
+                   ? song_page_.error
+                   : (song_page_.scanning ? "Loading SD index..." : "SD index unavailable");
+    else if (!song_page_.total)
+        text = "No MP3 files indexed";
+    else {
+        const char* states[] = {"Ready",    "Starting",        "Playing",
+                                "Finished", "Playback failed", "Stopped"};
+        text = states[std::clamp(song_status_, 0, 5)];
+        if (song_page_.scanning)
+            text += " | index updating";
+        if (song_page_.truncated)
+            text += " | limited index";
+        if (!song_page_.error.empty())
+            text += " | index warning";
+        text += song_detail_.empty() ? " | tap play; hold details" : ": " + song_detail_.substr(8);
+    }
+    Message(text.c_str());
+}
+
+void LeleMenu::PlaySong(bool details) {
+    if (!songs_page_ || !IsOpen() || preparing_ || transfer_boot_ || restart_to_transfer_)
+        return;
+    if (!lvgl_port_lock(1000))
+        return;
+    std::string path = std::move(pending_song_);
+    pending_song_.clear();
+    lvgl_port_unlock();
+    if (path.empty())
+        return;
+    song_detail_ = path;
+    if (details) {
+        UpdateSongStatus();
+        return;
+    }
+    const auto state = Application::GetInstance().GetDeviceState();
+    if (state != kDeviceStateIdle && state != kDeviceStateNotifying &&
+        state != kDeviceStateListening && state != kDeviceStateSpeaking) {
+        Message("Assistant not ready. Please wait until connected.");
+        return;
+    }
+    // The click captured a path, never an index that a refresh can reassign.
+    if (!RequestLichuangMusicPath(path)) {
+        ShowSongs(song_page_.offset);
+        Message("Library changed or SD unavailable. Select again.");
+        return;
+    }
+    song_status_ = -1;
+    ESP_LOGI("LeleSongs", "Indexed playback requested");
+    Message(("Starting: " + path.substr(8)).c_str());
+}
+
+void LeleMenu::PollSongs() {
+    if (!songs_page_ || !IsOpen())
+        return;
+    const auto now = uint32_t(esp_timer_get_time() / 1000);
+    if (uint32_t(now - song_polled_at_) < 1000)
+        return;
+    song_polled_at_ = now;
+    auto page = GetLichuangMusicPage(song_page_.offset);
+    if (page.revision != song_page_.revision || page.ready != song_page_.ready ||
+        page.scanning != song_page_.scanning || page.blocked != song_page_.blocked ||
+        page.error != song_page_.error) {
+        ShowSongs(page.offset);
+    } else if (Application::GetInstance().GetMusicStatus() != song_status_) {
+        UpdateSongStatus();
+    }
 }
 
 void LeleMenu::ChangeTheme() {
@@ -146,6 +330,7 @@ void LeleMenu::Close() {
     if (lvgl_port_lock(1000)) {
         assistant_tap_.Cancel();
         assistant_tap_pending_ = false;
+        pending_song_.clear();
         if (overlay_)
             lv_obj_add_flag(overlay_, LV_OBJ_FLAG_HIDDEN);
         open_ = false;
@@ -162,6 +347,7 @@ void LeleMenu::Toggle() {
             Close();
         else {
             display_settings_ = false;
+            songs_page_ = false;
             Show("Manage SD card files on your Mac.");
         }
     });
@@ -213,6 +399,30 @@ void LeleMenu::Poll() {
     if (!transfer_boot_ && !assistant_region_ && display_ && display_->IsSetupUICalled())
         InitializeAssistantTouch();
     switch (action_.exchange(Action::None)) {
+        case Action::Songs:
+            ShowSongs(0);
+            break;
+        case Action::PreviousSongs:
+            if (songs_page_ && song_page_.offset >= 4)
+                ShowSongs(song_page_.offset - 4);
+            break;
+        case Action::NextSongs:
+            if (songs_page_ && song_page_.offset + 4 < song_page_.total)
+                ShowSongs(song_page_.offset + 4);
+            break;
+        case Action::PlaySong:
+            PlaySong(false);
+            break;
+        case Action::SongDetails:
+            PlaySong(true);
+            break;
+        case Action::StopSong:
+            if (songs_page_ && !preparing_ && !transfer_boot_) {
+                Application::GetInstance().RequestMusicStop();
+                song_status_ = -1;
+                Message("Stopping...");
+            }
+            break;
         case Action::DisplaySettings:
             ShowDisplaySettings();
             break;
@@ -228,6 +438,7 @@ void LeleMenu::Poll() {
         case Action::MainMenu:
             if (!preparing_ && !transfer_boot_ && !restart_to_transfer_) {
                 display_settings_ = false;
+                songs_page_ = false;
                 Show("Manage SD card files on your Mac.");
             }
             break;
@@ -244,6 +455,7 @@ void LeleMenu::Poll() {
         default:
             break;
     }
+    PollSongs();
     if (assistant_tap_pending_.exchange(false) && !IsOpen() && !transfer_boot_ && !preparing_ &&
         !restart_to_transfer_) {
         auto& app = Application::GetInstance();
