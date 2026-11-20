@@ -1205,8 +1205,15 @@ endif()
 if(IDF_TARGET STREQUAL "esp32s3")
     list(APPEND MAIN_PRIV_REQUIRES_EXTRA esp_driver_usb_serial_jtag)
 endif()
+set(LELE_SQUIRREL_IMAGES "")
+if(CONFIG_LICHUANG_USB_STORAGE AND CONFIG_USE_DEFAULT_MESSAGE_STYLE)
+    foreach(expression neutral happy listening speaking thinking sad sleepy)
+        list(APPEND LELE_SQUIRREL_IMAGES
+            "boards/lckfb/szpi-esp32s3/assets/squirrel/squirrel_${expression}.png")
+    endforeach()
+endif()
 idf_component_register(SRCS ${SOURCES}
-                    EMBED_FILES ${LANG_SOUNDS} ${COMMON_SOUNDS}
+                    EMBED_FILES ${LANG_SOUNDS} ${COMMON_SOUNDS} ${LELE_SQUIRREL_IMAGES}
                     INCLUDE_DIRS ${INCLUDE_DIRS}
                     WHOLE_ARCHIVE
                     PRIV_REQUIRES

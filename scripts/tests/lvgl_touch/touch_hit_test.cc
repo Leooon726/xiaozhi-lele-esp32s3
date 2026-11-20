@@ -1,10 +1,40 @@
 #include <cassert>
+#include <fstream>
 #include <string>
+#include <vector>
 #include "assistant_touch_region.h"
 #include "lele_display_layout.h"
 #include "song_list_layout.h"
+#include "src/draw/lv_image_decoder_private.h"
+#include "src/misc/cache/instance/lv_image_cache.h"
+#include "src/misc/cache/instance/lv_image_header_cache.h"
 
 static void Event(lv_event_t*) {}
+
+static void CheckSquirrelImages() {
+    for (const auto* name :
+         {"neutral", "happy", "listening", "speaking", "thinking", "sad", "sleepy"}) {
+        const auto path = std::string(LELE_ROOT) +
+                          "/main/boards/lckfb/szpi-esp32s3/assets/squirrel/squirrel_" + name +
+                          ".png";
+        std::ifstream file(path, std::ios::binary);
+        assert(file);
+        const std::vector<uint8_t> data{std::istreambuf_iterator<char>(file), {}};
+        lv_image_dsc_t image{};
+        image.header.magic = LV_IMAGE_HEADER_MAGIC;
+        image.header.cf = LV_COLOR_FORMAT_RAW_ALPHA;
+        image.header.w = image.header.h = 144;
+        image.data_size = data.size();
+        image.data = data.data();
+        lv_image_decoder_dsc_t decoder{};
+        assert(lv_image_decoder_open(&decoder, &image, nullptr) == LV_RESULT_OK);
+        assert(decoder.header.w == 144 && decoder.header.h == 144 && decoder.decoded);
+        lv_image_decoder_close(&decoder);
+        // The backing vector is temporary; do not leave it in the image cache.
+        lv_image_cache_drop(&image);
+        lv_image_header_cache_drop(&image);
+    }
+}
 
 static void CheckSongScrolling(int width) {
     auto tall_font = *LV_FONT_DEFAULT;
@@ -175,6 +205,7 @@ static void CheckOrientation(lv_display_t* display, lv_display_rotation_t rotati
 
 int main() {
     lv_init();
+    CheckSquirrelImages();
     auto* display = lv_display_create(320, 240);
     auto* screen = lv_screen_active();
     lv_point_t center{160, 120};

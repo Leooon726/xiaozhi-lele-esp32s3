@@ -2,8 +2,11 @@
 #include "sdkconfig.h"
 #if defined(CONFIG_LICHUANG_USB_STORAGE) && defined(CONFIG_USE_DEFAULT_MESSAGE_STYLE)
 #include <esp_lvgl_port.h>
+#include <cstring>
+#include "assets/lang_config.h"
 #include "display/lcd_display.h"
 #include "lele_display_layout.h"
+#include "squirrel_images.h"
 
 // Board-local rotation: no change to other SPI displays or alternate UI styles.
 class LeleLcdDisplay : public SpiLcdDisplay {
@@ -18,9 +21,33 @@ public:
             return;
         AdaptLayout();
         lvgl_port_unlock();
+        SetEmotion("neutral");
     }
 
     bool IsPortrait() const { return portrait_; }
+
+    void SetStatus(const char* status) override {
+        if (!status)
+            return;
+        SpiLcdDisplay::SetStatus(status);
+        activity_ =
+            std::strcmp(status, Lang::Strings::LISTENING) == 0    ? SquirrelExpression::Listening
+            : std::strcmp(status, Lang::Strings::SPEAKING) == 0   ? SquirrelExpression::Speaking
+            : std::strcmp(status, Lang::Strings::CONNECTING) == 0 ? SquirrelExpression::Thinking
+                                                                  : SquirrelExpression::Neutral;
+        ShowSquirrel(activity_.load());
+    }
+
+    bool SetEmotion(const char* emotion) override {
+        if (!emotion || !*emotion)
+            return false;
+        auto expression = SquirrelEmotion(emotion);
+        if (expression == SquirrelExpression::Unsupported)
+            return false;
+        if (expression == SquirrelExpression::Neutral)
+            expression = activity_.load();
+        return ShowSquirrel(expression);
+    }
 
     // Called only on the main task (or during board construction), never in a
     // touch callback. LVGL rotates input points; keep FT5x06's base mapping.
@@ -55,6 +82,23 @@ public:
 
 private:
     bool portrait_ = false;
+    std::atomic<SquirrelExpression> activity_{SquirrelExpression::Neutral};
+
+    bool ShowSquirrel(SquirrelExpression expression) {
+        if (!IsSetupUICalled() || !emoji_image_ || !lvgl_port_lock(1000))
+            return false;
+        if (gif_controller_) {
+            gif_controller_->Stop();
+            gif_controller_.reset();
+        }
+        const auto* image = GetSquirrelImage(expression);
+        if (lv_image_get_src(emoji_image_) != image)
+            lv_image_set_src(emoji_image_, image);
+        emotion_uses_image_ = true;
+        ShowEmotion();
+        lvgl_port_unlock();
+        return true;
+    }
 
     void AdaptLayout() {
         LeleAssistantLayout{
