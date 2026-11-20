@@ -87,4 +87,5 @@
 - [ ] Mac/手机真实文件管理、SD 读回哈希、覆盖恢复/掉电、关闭/超时/断线和 FAT 验收。
 - [ ] 与横竖屏、Songs、音乐/索引和 USB 返回的联动测试。
 
-见 [WIFI_UPLOAD.md](WIFI_UPLOAD.md)。旧 test-039cf7b50d51-01 不含本功能。
+见 [WIFI_UPLOAD.md](WIFI_UPLOAD.md) 和 [test-58f3361265bf-01](testing/test-58f3361265bf-01.md)。
+新版 Pre-release 已交付，W-01..09 与 R-01..07 全部实机未测；旧包保留回溯。
