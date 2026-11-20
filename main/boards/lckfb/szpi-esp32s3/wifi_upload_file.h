@@ -74,9 +74,15 @@ public:
             nonce.empty() || nonce.find_first_not_of("0123456789abcdef") != std::string::npos)
             return Result::Invalid;
         struct stat info;
-        if (::mkdir(directory.c_str(), 0755) != 0 && errno != EEXIST)
-            return Result::Io;
-        if (::stat(directory.c_str(), &info) != 0 || !S_ISDIR(info.st_mode))
+        // ESP-IDF FatFS recognizes the mounted root as "/", not an empty
+        // path. Stat with a trailing slash and never mkdir an existing parent.
+        const auto parent = directory + "/";
+        if (::stat(parent.c_str(), &info) != 0) {
+            if (errno != ENOENT || (::mkdir(directory.c_str(), 0755) != 0 && errno != EEXIST) ||
+                ::stat(parent.c_str(), &info) != 0)
+                return Result::Io;
+        }
+        if (!S_ISDIR(info.st_mode))
             return Result::Io;
         final_ = directory + "/" + std::string(name);
         const bool exists = ::stat(final_.c_str(), &info) == 0;

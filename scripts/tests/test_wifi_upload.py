@@ -113,6 +113,46 @@ int main() {
 '''.replace("ROOT_DIR", json.dumps(str(folder / "uploads")))
             run_cpp(folder, code)
 
+    def test_fatfs_mount_root_does_not_require_mkdir(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)
+            code = r'''
+#include <cassert>
+#include <sys/stat.h>
+#include <cerrno>
+#include <cstring>
+#include <string>
+#include <fstream>
+static unsigned invalid_root_calls=0;
+static int fat_stat(const char* path, struct stat* info) {
+    if (std::strcmp(path,ROOT_DIR)==0) {
+        ++invalid_root_calls;errno=EINVAL;return -1;
+    }
+    return ::stat(path,info);
+}
+static int fat_mkdir(const char* path, mode_t mode) {
+    if (std::strcmp(path,ROOT_DIR)==0) {
+        ++invalid_root_calls;errno=EINVAL;return -1;
+    }
+    return ::mkdir(path,mode);
+}
+#define stat(...) fat_stat(__VA_ARGS__)
+#define mkdir(...) fat_mkdir(__VA_ARGS__)
+#include "wifi_upload_file.h"
+#undef stat
+#undef mkdir
+int main() {
+    LeleUpload::File upload;
+    assert(upload.Open(ROOT_DIR,"root.bin",4,"0001")==LeleUpload::Result::Ok);
+    assert(upload.Write("root",4));
+    assert(upload.Finish()==LeleUpload::Result::Ok);
+    assert(invalid_root_calls==0);
+    std::ifstream input(std::string(ROOT_DIR)+"/root.bin");
+    std::string data;input>>data;assert(data=="root");
+}
+'''.replace("ROOT_DIR", json.dumps(str(folder)))
+            run_cpp(folder, code)
+
     def test_storage_gate_is_not_released_until_scan_is_quiet(self):
         source = (BOARD / "music_tools.cc").read_text()
         functions = ""
