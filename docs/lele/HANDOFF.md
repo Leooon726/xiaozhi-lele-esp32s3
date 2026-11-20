@@ -204,7 +204,7 @@ Board 构造中的 Start 安装点击区域，而 Application::Initialize 随后
 保留通过。物理设备现在为 a09b405；五首布局需复验，不能沿用四首版验收。
 
 
-## Wi-Fi 性能策略候选（源码已改，尚未刷入）
+## Wi-Fi 性能策略（f2d91ff 已刷入，待上传复验）
 
 582a940 自动测试证实根目录小文件及 7 秒暂停后恢复成功；idle 1 MiB 仍失败，
 同版唤醒后串口 PERFORMANCE/NONE 下 1 MiB 成功 6.762 秒。用户提出常驻性能，
@@ -212,4 +212,6 @@ Board 构造中的 Start 安装点击区域，而 Application::Initialize 随后
 PERFORMANCE。WifiBoard 此接口只控制 Wi-Fi modem sleep，不是 CPU 满频开关；
 stock 无音乐变体及其他板型不变。这样协议关闭/回 idle 的 LOW_POWER 请求也不会
 重新启用 Wi-Fi 休眠。增加耗电，电池续航影响待实测；声音断续不能因此算已修复。
-当前物理设备仍为 582a940，新策略需独立构建、确认烧录及 idle 复验。
+f2d91ff 已按本次授权完成 16 MiB 备份/校验、五文件写入和 NVS 保留检查。
+启动 idle 实际 PERFORMANCE/NONE，340 首缓存/扫描通过；待机上传及语音专项
+尚未验收，见 [版本记录](testing/test-f2d91ff9dcdf-01.md)。
