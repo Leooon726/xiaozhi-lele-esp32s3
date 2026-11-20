@@ -18,6 +18,10 @@
 交接，标明源码提交、Pre-release、逐项结果及未测项；记录格式见
 [测试交接模板](docs/lele/testing/TEMPLATE.md)。
 
+当前首选待测版本：[test-2920ecbd72d3-01](docs/lele/testing/test-2920ecbd72d3-01.md)，
+修复短歌名静止/长歌名仅横向滚动，配对改为 6 位纯数字；保留已同步的上传
+修复和 Wi-Fi 性能策略。本包实机未测，按记录 S-01..06 验收。
+
 ## 曲库扩容与新菜单
 
 新增 Wi-Fi 文件管理源码（实机未测）：长按菜单 → Wi-Fi File Transfer，
