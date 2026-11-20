@@ -14,7 +14,7 @@ class Element {
 }
 const elements = Object.fromEntries(['key', 'connect', 'root', 'up', 'mkdir', 'prev', 'next',
   'entries', 'files', 'send', 'result', 'path', 'notice'].map(id => [id, new Element()]));
-elements.key.value = '12345678';
+elements.key.value = '012345';
 const replies = [], calls = [], confirmations = [], prompts = [], messages = [];
 const document = {
   getElementById: id => elements[id],
@@ -27,7 +27,7 @@ const context = {
   prompt: () => { assert(prompts.length); return prompts.shift(); },
   fetch: async (url, options) => {
     assert(replies.length, 'Unexpected request: ' + url);
-    assert.equal(options.headers['X-Lele-Key'], '12345678');
+    assert.equal(options.headers['X-Lele-Key'], '012345');
     calls.push({url, options});
     const reply = replies.shift();
     return {ok: !reply.status, status: reply.status || 200,
@@ -46,6 +46,13 @@ const action = label => {
 const operation = () => calls.filter(call => call.url.startsWith('/manage?')).at(-1);
 
 (async () => {
+  for (const invalid of ['12345', '12345678', '12A456']) {
+    elements.key.value = invalid;
+    await elements.connect.onclick();
+    assert.equal(calls.length, 0);
+    assert.match(elements.result.textContent, /6-digit/);
+  }
+  elements.key.value = '012345';
   replies.push(listing(1));
   await elements.connect.onclick();
   assert.equal(elements.entries.children[0].children[0].textContent, '已有.mp3');

@@ -92,7 +92,8 @@ bool LeleWifiUpload::Start() {
     struct ifreq interface = {};
     if (!netif || esp_netif_get_netif_impl_name(netif, interface.ifr_name) != ESP_OK)
         return false;
-    std::snprintf(code_, sizeof(code_), "%08lX", static_cast<unsigned long>(esp_random()));
+    std::snprintf(code_, sizeof(code_), "%06lu",
+                  static_cast<unsigned long>(esp_random() % 1000000));
     address_ = "http://" + ip + ":8080";
     expires_at_ = esp_timer_get_time() + kSessionUs;
     cancelled_ = false;
@@ -179,12 +180,12 @@ void LeleWifiUpload::RequestStop() {
 }
 
 bool LeleWifiUpload::Authorized(httpd_req_t* request) {
-    char supplied[9]{};
+    char supplied[sizeof(code_)]{};
     unsigned different = 0;
-    if (httpd_req_get_hdr_value_len(request, "X-Lele-Key") != 8 ||
+    if (httpd_req_get_hdr_value_len(request, "X-Lele-Key") != sizeof(code_) - 1 ||
         httpd_req_get_hdr_value_str(request, "X-Lele-Key", supplied, sizeof(supplied)) != ESP_OK)
         different = 1;
-    for (size_t i = 0; i < 8; ++i)
+    for (size_t i = 0; i < sizeof(code_) - 1; ++i)
         different |= static_cast<unsigned char>(supplied[i] ^ code_[i]);
     if (different && ++failures_ >= 8)
         cancelled_ = true;

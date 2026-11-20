@@ -269,7 +269,7 @@ inline int esp_netif_get_netif_impl_name(void*,char* name) {std::strcpy(name,"lo
                 "esp_random.h": r'''
 #pragma once
 #include <cstdint>
-inline uint32_t esp_random() {static uint32_t value=0x12345678;return ++value;}
+inline uint32_t esp_random() {static uint32_t value=0;return value++;}
 ''',
                 "esp_timer.h": "#pragma once\n#include <cstdint>\ninline int64_t now=0;\ninline int64_t esp_timer_get_time(){return now;}\n",
                 "freertos/FreeRTOS.h": "#pragma once\nconstexpr int pdPASS=1;\n",
@@ -339,6 +339,7 @@ int main(){
     WifiManager::GetInstance().connected=false;assert(!upload.Start() && upload.Stopped());
     WifiManager::GetInstance().connected=true;assert(upload.Start() && !upload.Stopped());
     assert(routes.size()==5 && upload.Address()=="http://192.168.1.2:8080");
+    assert(std::string(upload.Code())=="000000");
     httpd_req_t page;page.user_ctx=&upload;
     assert(routes[0].handler(&page)==ESP_OK);
     assert(page.response.find("X-Lele-Key")!=std::string::npos);
@@ -346,6 +347,10 @@ int main(){
     auto wrong=request(upload,"wrong.mp3");wrong.key="bad";
     assert(call(upload,wrong)==ESP_FAIL && wrong.status=="403 Forbidden");
     assert(wrong.read==0 && !fs::exists(ROOT_DIR "/wrong.mp3"));
+    for(const char* key:{"12345","12345678","12A456"}) {
+        auto bad=request(upload,"invalid-code.mp3");bad.key=key;
+        assert(call(upload,bad)==ESP_FAIL && bad.status=="403 Forbidden" && bad.read==0);
+    }
     auto traversal=request(upload,"..%2Fsecret.mp3");
     assert(call(upload,traversal)==ESP_FAIL && traversal.status=="400 Bad Request");
     auto large=request(upload,"large.mp3");large.content_len=LeleUpload::kMaxFileBytes+1;
@@ -458,7 +463,7 @@ struct Upload {
     bool Start(){++starts;if(start_ok)stopped=false;return start_ok;}
     unsigned Saved(){return 0;}
     std::string Address(){return "http://192.168.1.2:8080";}
-    const char* Code(){return "12345678";}
+    const char* Code(){return "012345";}
 };
 struct LeleMenu {
     Upload wifi_upload_;
@@ -480,7 +485,7 @@ int main(){
     menu.PollWifiUpload();assert(menu.wifi_upload_.starts==0);
     app.busy=false;menu.PollWifiUpload();
     assert(menu.wifi_started_ && !menu.preparing_ && pending && app.blocked);
-    assert(menu.message.find("12345678")!=std::string::npos);
+    assert(menu.message.find("012345")!=std::string::npos);
     menu.wifi_closing_=true;menu.PollWifiUpload();
     assert(menu.wifi_upload_.requested && pending && app.blocked && refreshed==0);
     menu.wifi_upload_.stopped=true;menu.PollWifiUpload();

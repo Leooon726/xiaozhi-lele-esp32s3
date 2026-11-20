@@ -12,7 +12,7 @@
 1. 长按功能键约 2 秒 → **Wi-Fi File Transfer**。未连接 Wi-Fi 时提示先连接；
    正在对话时先结束会话。设备停止音乐，等待播放文件和索引扫描关闭，最长
    准备 30 秒。SD 未就绪或不能保存重扫标记时不启动可写服务，不格式化卡。
-2. 屏幕显示 http://设备IP:8080、8 位十六进制 Code 和 Changes 次数。
+2. 屏幕显示 http://设备IP:8080、6 位纯数字 Code（保留前导零） 和 Changes 次数。
    用浏览器打开地址，输入 Code，点 Connect / Refresh。
    这是局域网 HTTP，不提供 HTTPS 或公网转发。
 3. 网页从 SD 根目录开始，可浏览普通子目录、返回上层、分页查看，每页最多
@@ -69,10 +69,10 @@ FAT 上多次 rename 并非断电原子事务。覆盖中掉电可能留下 .par
 
 ~~~bash
 # 根目录列表；path 为空表示根目录
-curl --fail -H 'X-Lele-Key: ABCD1234' \
+curl --fail -H 'X-Lele-Key: 012345' \
   'http://192.168.1.23:8080/files?path='
 # 上传到已存在的 music 目录；默认不能覆盖
-curl --fail -H 'X-Lele-Key: ABCD1234' \
+curl --fail -H 'X-Lele-Key: 012345' \
   --data-binary '@/path/song.mp3' \
   'http://192.168.1.23:8080/upload?path=music%2Fsong.mp3'
 shasum -a 256 /path/song.mp3

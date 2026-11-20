@@ -195,7 +195,7 @@ void LeleMenu::ShowSongs(size_t offset) {
     lv_obj_set_style_border_width(overlay_, 0, 0);
     // One header only: status/details share it instead of taking a song row.
     message_ = lv_label_create(overlay_);
-    lv_obj_set_size(message_, lv_pct(100), 28);
+    lv_obj_set_size(message_, lv_pct(100), LV_SIZE_CONTENT);
     lv_label_set_long_mode(message_, LV_LABEL_LONG_SCROLL_CIRCULAR);
     if (song_font_)
         lv_obj_set_style_text_font(message_, song_font_->font(), 0);

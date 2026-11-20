@@ -38,7 +38,9 @@ inline lv_obj_t* CreateSongListFooter(lv_obj_t* overlay) {
 inline void ConfigureSongListButton(lv_obj_t* button, const lv_font_t* font) {
     lv_obj_set_height(button, 30);
     auto* label = lv_obj_get_child(button, 0);
-    lv_obj_set_size(label, lv_pct(96), 28);
+    // Circular scrolling also scrolls vertically when the font exceeds a fixed
+    // height. Let the single expanded line determine its height instead.
+    lv_obj_set_size(label, lv_pct(96), LV_SIZE_CONTENT);
     lv_label_set_long_mode(label, LV_LABEL_LONG_SCROLL_CIRCULAR);
     if (font)
         lv_obj_set_style_text_font(label, font, 0);

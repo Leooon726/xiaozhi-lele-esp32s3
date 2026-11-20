@@ -11,7 +11,7 @@ pre{white-space:pre-wrap}button{cursor:pointer}button:disabled{cursor:default}
 </style><h1>Lele SD files</h1>
 <p>Keep Wi-Fi File Transfer open on the device. Hidden/system files are protected.
 Delete removes files or empty folders only. Uploads: 1 byte–64 MiB per file.</p>
-<label>Device code <input id="key" maxlength="8" autocomplete="off"></label>
+<label>Device code <input id="key" maxlength="6" inputmode="numeric" pattern="[0-9]{6}" autocomplete="off"></label>
 <button id="connect">Connect / Refresh</button>
 <p id="path">Not connected</p><p id="notice" role="status"></p>
 <nav><button id="root">SD root</button><button id="up">Up</button>
@@ -34,8 +34,8 @@ function setBusy(value){
  navigation();
 }
 async function api(url,options={}){
- const key=byId('key').value.trim().toUpperCase();
- if(!/^[0-9A-F]{8}$/.test(key))throw Error('Enter the 8-character code shown on the device.');
+ const key=byId('key').value.trim();
+ if(!/^[0-9]{6}$/.test(key))throw Error('Enter the 6-digit code shown on the device.');
  const response=await fetch(url,{...options,headers:{'X-Lele-Key':key,...(options.headers||{})}});
  const text=await response.text();
  if(!response.ok){const error=Error(response.status+' '+text);error.status=response.status;throw error;}

@@ -6,6 +6,31 @@
 
 static void Event(lv_event_t*) {}
 
+static void CheckSongScrolling(int width) {
+    auto tall_font = *LV_FONT_DEFAULT;
+    tall_font.line_height = 32;  // Reproduce fonts taller than the old 28px label.
+    const lv_font_t* fonts[] = {LV_FONT_DEFAULT, &tall_font};
+    for (const auto* font : fonts) {
+        auto* button = CreateLeleButton(lv_layer_top(), "Short", true);
+        lv_obj_set_width(button, width - 12);
+        ConfigureSongListButton(button, font);
+        auto* label = lv_obj_get_child(button, 0);
+        lv_obj_update_layout(button);
+        assert(lv_obj_get_content_height(label) == lv_font_get_line_height(font));
+        assert(lv_anim_get(label, nullptr) == nullptr);
+        lv_label_set_text(
+            label, "A very long song name that cannot fit in either screen orientation at all");
+        lv_obj_update_layout(button);
+        auto* animation = lv_anim_get(label, nullptr);
+        assert(animation && -animation->end_value > lv_obj_get_content_width(label));
+        assert(lv_obj_get_content_height(label) == lv_font_get_line_height(font));
+        lv_label_set_text(label, "Short");
+        lv_obj_update_layout(button);
+        assert(lv_anim_get(label, nullptr) == nullptr);
+        lv_obj_delete(button);
+    }
+}
+
 static void CheckOrientation(lv_display_t* display, lv_display_rotation_t rotation,
                              lv_obj_t* region) {
     lv_display_set_rotation(display, rotation);
@@ -134,7 +159,7 @@ static void CheckOrientation(lv_display_t* display, lv_display_rotation_t rotati
     lv_obj_set_style_text_font(message, LV_FONT_DEFAULT, 0);
     lv_label_set_long_mode(message, LV_LABEL_LONG_WRAP);
     lv_label_set_text(message,
-                      "http://192.168.100.100:8080\nCode: 12345678\nChanges: 100\n"
+                      "http://192.168.100.100:8080\nCode: 012345\nChanges: 100\n"
                       "64 MiB/file; 10-minute session\nManage SD files in browser.\n"
                       "End transfer to update Songs.");
     auto* end = CreateLeleButton(overlay, "End Wi-Fi Transfer", false);
@@ -236,7 +261,7 @@ int main() {
             assert(area.x1 >= 0 && area.x2 < width);
             assert(lv_obj_get_height(button) == 30);
             auto* label = lv_obj_get_child(button, 0);
-            assert(lv_obj_get_height(label) == 28);
+            assert(lv_obj_get_height(label) == lv_font_get_line_height(LV_FONT_DEFAULT));
             assert(lv_label_get_long_mode(label) == LV_LABEL_LONG_SCROLL_CIRCULAR);
             lv_point_t point{(area.x1 + area.x2) / 2, (area.y1 + area.y2) / 2};
             assert(lv_indev_search_obj(lv_layer_top(), &point) == button);
@@ -249,6 +274,7 @@ int main() {
             assert(lv_obj_get_width(button) >= 48);
         }
         lv_obj_delete(overlay);
+        CheckSongScrolling(width);
     }
     lv_display_delete(display);
     lv_deinit();

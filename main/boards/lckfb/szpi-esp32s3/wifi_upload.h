@@ -23,7 +23,7 @@ private:
     httpd_handle_t server_ = nullptr;
     int64_t expires_at_ = 0;
     std::string address_;
-    char code_[9]{};
+    char code_[7]{};
     unsigned failures_ = 0;  // HTTP server task only.
     bool Authorized(httpd_req_t* request);
     bool Confirmed(httpd_req_t* request) const;
