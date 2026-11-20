@@ -369,6 +369,15 @@ public:
         GetBacklight()->RestoreBrightness();
     }
 
+#ifdef CONFIG_LICHUANG_TF_MUSIC
+    void SetPowerSaveLevel(PowerSaveLevel level) override {
+        // Lele prioritizes network audio and SD transfer latency over Wi-Fi
+        // modem sleep. WifiBoard only changes Wi-Fi PS here, not CPU frequency.
+        (void)level;
+        WifiBoard::SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
+    }
+#endif
+
     virtual AudioCodec* GetAudioCodec() override {
         static CustomAudioCodec audio_codec(i2c_bus_, pca9557_);
         return &audio_codec;
