@@ -7,6 +7,11 @@
 新测试结果写入对应 `testing/<release-tag>.md`。下文保留分阶段历史叙述，
 其中“当前设备”“待验收”须结合段落时间阅读，不代表实时查询到的设备状态。
 
+2026-11-20 新开发 F-008：长按 → Display 的横竖屏即时切换及记忆，源码完成、
+实机未测。默认助手 UI 的两个音乐变体启用，Songs 保持每页五首并适配宽度。
+实现约束、验证范围和实机 R-01..07 见 [DISPLAY.md](DISPLAY.md) 与 TESTING；
+本轮没有创建 Release 或操作设备，最近设备证据仍为下文历史。
+
 新机器 setup 入口（2026-11-20）：见 [SETUP.md](SETUP.md)。统一 Docker
 包装脚本为 `scripts/lele/build_docker.py`，固定 IDF v6.1.1 和当前 debug 音乐
 变体；Linux aarch64 新克隆完整构建已通过。Windows/macOS Docker 尚未实测，

@@ -11,6 +11,7 @@
 #include "assistant_touch_region.h"
 #include "backlight.h"
 #include "display.h"
+#include "lele_display.h"
 #include "lvgl_theme.h"
 #include "music_storage.h"
 #include "settings.h"
@@ -123,8 +124,21 @@ void LeleMenu::Show(const char* text, bool transfer) {
             AddButton("Return to Assistant", Action::Return, 0);
         } else if (display_settings_) {
             AddButton(IsDark() ? "Theme: Dark" : "Theme: Light", Action::Theme, 0);
-            AddButton("Brightness -", Action::Dim, 1);
-            AddButton("Brightness +", Action::Brighten, 2);
+#ifdef CONFIG_USE_DEFAULT_MESSAGE_STYLE
+            if (orientation_display_) {
+                AddButton(orientation_display_->IsPortrait() ? "Orientation: Portrait"
+                                                             : "Orientation: Landscape",
+                          Action::Orientation, 4);
+            }
+#endif
+            auto* brightness = CreateSongListFooter(overlay_);
+            lv_obj_set_height(brightness, 32);
+            auto* dim = AddButton("Dim -", Action::Dim, 1, brightness);
+            auto* brighten = AddButton("Bright +", Action::Brighten, 2, brightness);
+            for (auto* button : {dim, brighten}) {
+                lv_obj_set_width(button, 0);
+                lv_obj_set_flex_grow(button, 1);
+            }
             AddButton("Back", Action::MainMenu, 3);
         } else {
             AddButton("USB File Transfer", Action::Enter, 0);
@@ -311,6 +325,26 @@ void LeleMenu::ChangeBrightness(int delta) {
     Message(text);
 }
 
+void LeleMenu::ChangeOrientation() {
+#ifdef CONFIG_USE_DEFAULT_MESSAGE_STYLE
+    if (!orientation_display_ || !display_settings_ || !IsOpen() || preparing_ || transfer_boot_ ||
+        restart_to_transfer_)
+        return;
+    const bool portrait = !orientation_display_->IsPortrait();
+    if (!orientation_display_->SetPortrait(portrait)) {
+        Message("Display is busy. Try again.");
+        return;
+    }
+    {
+        Settings settings("display", true);
+        settings.SetInt("portrait", portrait ? 1 : 0);
+    }
+    ESP_LOGI("LeleDisplay", "Orientation: %s (%dx%d)", portrait ? "portrait" : "landscape",
+             display_->width(), display_->height());
+    ShowDisplaySettings();
+#endif
+}
+
 void LeleMenu::Message(const char* text) {
     if (lvgl_port_lock(1000)) {
         if (message_)
@@ -429,6 +463,9 @@ void LeleMenu::Poll() {
             break;
         case Action::Brighten:
             ChangeBrightness(10);
+            break;
+        case Action::Orientation:
+            ChangeOrientation();
             break;
         case Action::MainMenu:
             if (!preparing_ && !transfer_boot_ && !restart_to_transfer_) {

@@ -11,10 +11,12 @@
 class Display;
 class Backlight;
 class LvglFont;
+class LeleLcdDisplay;
 
 class LeleMenu {
 public:
     void Configure(Display* display, Backlight* backlight);
+    void ConfigureOrientation(LeleLcdDisplay* display) { orientation_display_ = display; }
     void RunTransferBootIfRequested();
     void Start();
     void Toggle();
@@ -32,6 +34,7 @@ private:
         Theme,
         Dim,
         Brighten,
+        Orientation,
         MainMenu,
         Songs,
         PreviousSongs,
@@ -64,6 +67,7 @@ private:
     std::atomic<bool> assistant_tap_pending_{false};
     Display* display_ = nullptr;
     Backlight* backlight_ = nullptr;
+    LeleLcdDisplay* orientation_display_ = nullptr;
     int brightness_ = 75;
     bool display_settings_ = false;
     bool songs_page_ = false;
@@ -83,6 +87,7 @@ private:
     void ShowDisplaySettings();
     void ChangeTheme();
     void ChangeBrightness(int delta);
+    void ChangeOrientation();
     bool IsDark() const;
     void Message(const char* text);
     void Close();

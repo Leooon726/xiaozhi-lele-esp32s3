@@ -6,9 +6,11 @@
 #include "display/lcd_display.h"
 #include "esp32_camera.h"
 #include "i2c_device.h"
+#include "lele_display.h"
 #include "lele_menu.h"
 #include "mcp_server.h"
 #include "press_to_talk_mcp_tool.h"
+#include "settings.h"
 #include "usb_transfer.h"
 #include "wifi_board.h"
 #ifdef CONFIG_LICHUANG_TF_MUSIC
@@ -78,6 +80,9 @@ private:
     Pca9557* pca9557_;
     Esp32Camera* camera_;
     PressToTalkMcpTool* press_to_talk_tool_ = nullptr;
+#if defined(CONFIG_LICHUANG_USB_STORAGE) && defined(CONFIG_USE_DEFAULT_MESSAGE_STYLE)
+    LeleLcdDisplay* rotating_display_ = nullptr;
+#endif
 #ifdef CONFIG_LICHUANG_USB_STORAGE
     LeleMenu menu_;
     std::atomic<bool> menu_long_press_{false};
@@ -213,6 +218,13 @@ private:
 
 #if CONFIG_USE_EMOTE_MESSAGE_STYLE
         display_ = new emote::EmoteDisplay(panel, panel_io, DISPLAY_WIDTH, DISPLAY_HEIGHT);
+#elif defined(CONFIG_LICHUANG_USB_STORAGE) && defined(CONFIG_USE_DEFAULT_MESSAGE_STYLE)
+        rotating_display_ = new LeleLcdDisplay(panel_io, panel, DISPLAY_WIDTH, DISPLAY_HEIGHT,
+                                               DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X,
+                                               DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY);
+        display_ = rotating_display_;
+        Settings settings("display", false);
+        rotating_display_->SetPortrait(settings.GetInt("portrait", 0) == 1);
 #else
         display_ = new SpiLcdDisplay(panel_io, panel, DISPLAY_WIDTH, DISPLAY_HEIGHT,
                                      DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X,
@@ -343,6 +355,9 @@ public:
 #ifdef CONFIG_LICHUANG_USB_STORAGE
         GetBacklight()->RestoreBrightness();
         menu_.Configure(display_, GetBacklight());
+#if defined(CONFIG_USE_DEFAULT_MESSAGE_STYLE)
+        menu_.ConfigureOrientation(rotating_display_);
+#endif
         menu_.RunTransferBootIfRequested();
 #endif
         InitializeCamera();
