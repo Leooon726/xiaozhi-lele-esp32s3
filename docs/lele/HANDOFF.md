@@ -227,3 +227,14 @@ f2d91ff 已按本次授权完成 16 MiB 备份/校验、五文件写入和 NVS �
 启动 idle 实际 PERFORMANCE/NONE，340 首缓存/扫描通过；待机根目录 1 MiB 8.191 秒、子目录 1 MiB
 5.263 秒自动上传成功，摘要匹配且自身诊断对象清理成功；用户已确认手机
 MP3 上传、结束传输后播放正常。语音/重连及长期专项仍待测，见 [版本记录](testing/test-f2d91ff9dcdf-01.md)。
+
+
+## 2026-11-21 松鼠版上板（d0b44f2d3f6c）
+
+Mac 同步 main 后按用户指令选择最新未验证 Pre-release
+[test-d0b44f2d3f6c-01](testing/test-d0b44f2d3f6c-01.md)，下载核对四附件、
+完成 16 MiB 备份/设备端校验、五文件写入/NVS 保留检查。当前物理应用为
+d0b44f2d3f6ce065c8cc5fde36bac5ab5ecabd82；不是 main 文档提交的 SHA。
+4.6 秒进入 idle，Wi-Fi PERFORMANCE/NONE；加载和扫描均 346 首，缓存保存成功。
+45 秒启动窗口未见 panic；已释放串口。松鼠视觉/状态切换及 Q-01..04
+仍待用户确认；本版不含自动息屏，不继承旧版交互验收。
