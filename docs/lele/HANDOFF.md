@@ -10,7 +10,9 @@
 2026-11-20 新开发 F-008：长按 → Display 的横竖屏即时切换及记忆，源码完成、
 实机未测。默认助手 UI 的两个音乐变体启用，Songs 保持每页五首并适配宽度。
 实现约束、验证范围和实机 R-01..07 见 [DISPLAY.md](DISPLAY.md) 与 TESTING；
-本轮没有创建 Release 或操作设备，最近设备证据仍为下文历史。
+已交付 [test-039cf7b50d51-01](testing/test-039cf7b50d51-01.md) Pre-release，
+源码为 `039cf7b`。五分区包已上传并完成 Linux 下载回读，Mac 端 R-01..07
+全部未测；本轮未操作设备，最近设备证据仍为下文历史。
 
 新机器 setup 入口（2026-11-20）：见 [SETUP.md](SETUP.md)。统一 Docker
 包装脚本为 `scripts/lele/build_docker.py`，固定 IDF v6.1.1 和当前 debug 音乐
