@@ -1,5 +1,23 @@
 # 验证记录和边界
 
+## 新环境 Setup（2026-11-20）
+
+Ubuntu Linux aarch64，新克隆源码 `8e85347`，官方 Docker 镜像
+`espressif/idf:v6.1.1`（Python 3.12.3）。使用仓库组件快照完成当前
+`lichuang-dev-lele-music-debug` 的依赖下载、完整编译、链接、合并及 ZIP 打包。
+五个分区文件存在且非空，应用 2,979,920 bytes，应用槽剩余 28%，资源容量检查
+通过；ZIP 完整性和内部合并镜像与构建文件的一致性通过。sdkconfig 确认乐乐
+唤醒、音乐、debug、USB storage 启用，构建没有修改受跟踪源码。
+
+统一跨平台步骤见 [SETUP.md](SETUP.md)，正式包装入口为
+`scripts/lele/build_docker.py`。本轮未连接设备或烧录；Windows 原生/Docker、
+WSL 2、macOS Docker、Linux x86_64 未在本项目实测，保留为验证边界。
+
+正式包装脚本已在同一 Linux 环境实际重跑：复用缓存、重新配置/链接、容量
+检查、合并和 ZIP 打包完成，退出码为 0。包装脚本语法检查、缺 Docker 时明确
+报错并返回 1、文档本地链接及差异空白检查通过。此重跑是增量构建，不冒充
+另一台干净主机的再次完整编译；首次新克隆的完整构建证据见上段。
+
 ## 实机（2026-11-19）
 
 | 验证 | 结果 |

@@ -1,25 +1,15 @@
-# macOS 构建、备份和烧录
+# 构建、备份和烧录
 
-## 独立环境
+## 新机器环境入口
 
-不修改系统 Python 或 shell 配置。推荐 Python 3.12、Git、CMake 3.31.10、Ninja 1.13.2。实测 SDK 为 **ESP-IDF v6.1.1**（最低要求 6.0.1；不支持 IDF 5.x）。
+Windows / macOS / Linux 的完整准备步骤、固定版本、Docker 统一入口、原生
+安装、常见阻塞及验收标准统一维护在 **[SETUP.md](SETUP.md)**。
+新机器优先使用 `python3 scripts/lele/build_docker.py`（Windows：`py -3`），
+无需复制原 Mac 工具目录。实测 SDK 为 **ESP-IDF v6.1.1**，不支持 IDF 5.x。
 
-当前 Mac 已迁移了工具链到仓库下被忽略的 `.tools/`，可直接 `source scripts/lele/env.sh`。另一台电脑从 GitHub 克隆不会带工具链，按官方 SDK 安装流程在任意独立目录安装：
-
-```bash
-# 以下为新机器准备示例，由 agent 执行；没有刷写操作。
-git clone --branch v6.1.1 --recursive https://github.com/espressif/esp-idf.git "$HOME/esp/esp-idf-v6.1.1"
-IDF_TOOLS_PATH="$HOME/esp/lele-idf-tools" bash "$HOME/esp/esp-idf-v6.1.1/install.sh" esp32s3
-export LELE_IDF_PATH="$HOME/esp/esp-idf-v6.1.1"
-export LELE_IDF_TOOLS_PATH="$HOME/esp/lele-idf-tools"
-source scripts/lele/env.sh
-python --version
-idf.py --version
-```
-
-先确保 SDK 安装使用 Python 3.12；这些示例不自动修改 PATH/配置文件。`env.sh` 只影响当前 shell。也可在已经激活的官方环境中直接使用 `scripts/build.py`。
-
-当前已验证构建的依赖快照为 `config/lele/dependencies.lock`。新环境第一次构建前可将其复制到根目录 `dependencies.lock`（被 Git 忽略），再由 IDF 解析；这是复现输入，不要手动改 managed_components。锁定的组件仍从官方组件服务下载。
+原 Mac 的 `.tools/` 环境仍可用 `source scripts/lele/env.sh` 激活；它不是
+克隆后自带的环境。组件快照为 `config/lele/dependencies.lock`，Docker 包装
+脚本只在根目录锁缺失时复制；已有环境不自动覆盖。不手动改 managed_components。
 
 ## 构建
 

@@ -7,7 +7,7 @@
 ## 接手从这里开始
 
 1. **[交接与当前状态](docs/lele/HANDOFF.md)**：已经做了什么、哪些已实机验证、下一步和不能据此推断的结论。
-2. **[构建、备份和烧录](docs/lele/BUILD_FLASH.md)**：macOS 独立环境、构建命令、分区地址、备份和回滚。
+2. **[跨平台 Setup](docs/lele/SETUP.md)**：Windows / macOS / Linux 新机器环境、统一 Docker 构建入口和验收清单；**[备份和烧录](docs/lele/BUILD_FLASH.md)**：分区地址、备份和回滚。
 3. **[本地调试](docs/lele/DEBUGGING.md)**：USB 命令、BOOT 长按、日志阶段与排查方法。
 4. **[硬件与设计](docs/lele/ARCHITECTURE.md)**：引脚、模块位置、内存与状态调度、SD 索引缓存。
 5. **[验证记录](docs/lele/VALIDATION.md)**、**[开发历史](docs/lele/HISTORY.md)**、**[后续 OTA](docs/lele/OTA.md)**。
@@ -40,7 +40,14 @@
 
 ## 快速构建与本地调试
 
-准备 ESP-IDF v6.1.1 / Python 3.12 环境，详细步骤见构建文档：
+新机器先按 [Setup 指南](docs/lele/SETUP.md) 准备 Git、Python 和 Docker，
+使用固定 ESP-IDF v6.1.1 镜像构建（Windows PowerShell 用 `py -3` 替代 `python3`）：
+
+```bash
+python3 scripts/lele/build_docker.py
+```
+
+原生 ESP-IDF 环境安装也见 Setup 指南。已有原生环境的本地调试命令：
 
 ```bash
 source scripts/lele/env.sh

@@ -3,8 +3,12 @@
 ## Lele project handoff (read first)
 
 This repository extends XiaoZhi for the LiChuang Shizhanpai ESP32-S3.
-Before changes, read `docs/lele/HANDOFF.md`, `BUILD_FLASH.md`, `DEBUGGING.md`,
-and `VALIDATION.md`. They replace any reliance on prior chat history.
+Before changes, read `docs/lele/HANDOFF.md`, `docs/lele/BUILD_FLASH.md`,
+`docs/lele/DEBUGGING.md`, and `docs/lele/VALIDATION.md`. They replace any reliance
+on prior chat history. For a new machine, follow `docs/lele/SETUP.md` first:
+prefer `python3 scripts/lele/build_docker.py` (Windows: `py -3 ...`), pinned to
+ESP-IDF v6.1.1 and the checked-in Lele component lock. Finish its build acceptance
+checks before declaring setup complete; report untested operating systems honestly.
 Current hardware baseline: `lichuang-dev-lele-music-debug`, wake phrase 乐乐,
 SD-wide MP3 indexing with a dual-slot SD cache, and a local USB diagnostic entry.
 
@@ -14,7 +18,7 @@ SD-wide MP3 indexing with a dual-slot SD cache, and a local USB diagnostic entry
 - Never commit Flash/NVS backups, credentials, device identifiers, raw serial
   logs, local toolchains or generated artifacts. Keep them under `.local/` or
   `.tools/`, both ignored. Never force-add them, even to a private repository.
-- Use `scripts/lele/build.sh` or canonical `scripts/build.py`; `env.sh` is
+- Use `scripts/lele/build_docker.py`, `scripts/lele/build.sh` or canonical `scripts/build.py`; `env.sh` is
   project-local and must not modify the user's shell/system Python.
 - Use `scripts/lele/music_debug.py` for diagnosis without asking the user to
   repeatedly wake the assistant. Serial opens may reset native USB devices.
@@ -48,7 +52,9 @@ SD-wide MP3 indexing with a dual-slot SD cache, and a local USB diagnostic entry
 
 XiaoZhi is an ESP-IDF C/C++ voice-assistant firmware supporting many chips, boards, displays, audio devices, and network transports. A build selects exactly one board implementation.
 
-Use the ESP-IDF `release/v6.1` branch when possible. The minimum supported SDK is ESP-IDF v6.0.1. IDF 5.x is not supported.
+For this Lele fork, reproduce builds with ESP-IDF **v6.1.1** as documented in
+`docs/lele/SETUP.md`; do not silently switch to a rolling release branch. The
+upstream minimum supported SDK is ESP-IDF v6.0.1. IDF 5.x is not supported.
 
 ## Architecture
 
