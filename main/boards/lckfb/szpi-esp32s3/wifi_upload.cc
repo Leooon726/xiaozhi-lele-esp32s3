@@ -1,5 +1,6 @@
 #include "wifi_upload.h"
 #ifdef CONFIG_LICHUANG_USB_STORAGE
+#include <esp_log.h>
 #include <esp_netif.h>
 #include <esp_random.h>
 #include <esp_timer.h>
@@ -8,6 +9,7 @@
 #include <net/if.h>
 #include <psa/crypto.h>
 #include <algorithm>
+#include <cerrno>
 #include <cstdio>
 #include <memory>
 #include <new>
@@ -19,6 +21,7 @@
 namespace {
 constexpr int64_t kSessionUs = 10LL * 60 * 1000000;
 constexpr int64_t kUploadUs = 2LL * 60 * 1000000;
+constexpr int64_t kReceiveIdleUs = 20LL * 1000000;
 constexpr char kSdRoot[] = "/sdcard";
 constexpr auto& kPage = LeleUpload::kFilePage;
 
@@ -328,18 +331,48 @@ esp_err_t LeleWifiUpload::Upload(httpd_req_t* request) {
     }
     size_t remaining = request->content_len;
     unsigned chunks = 0;
-    const auto deadline = esp_timer_get_time() + kUploadUs;
+    auto last_progress = esp_timer_get_time();
+    const auto deadline = last_progress + kUploadUs;
     while (remaining && !upload->NeedsStop() && esp_timer_get_time() < deadline) {
         const int received =
             httpd_req_recv(request, buffer.get(), std::min(remaining, size_t(2048)));
-        if (received <= 0 || !file.Write(buffer.get(), received) ||
-            psa_hash_update(&hash, reinterpret_cast<const uint8_t*>(buffer.get()), received) !=
-                PSA_SUCCESS) {
+        if (received == HTTPD_SOCK_ERR_TIMEOUT) {
+            ESP_LOGW("LeleUpload", "Receive timeout: bytes=%u/%u",
+                     unsigned(request->content_len - remaining), unsigned(request->content_len));
+            if (esp_timer_get_time() - last_progress >= kReceiveIdleUs) {
+                psa_hash_abort(&hash);
+                return Error(request, "408 Request Timeout",
+                             "Upload receive timed out (20 seconds without data); file not saved.");
+            }
+            continue;  // A socket wait timeout is recoverable; overall/idle limits remain bounded.
+        }
+        if (received <= 0) {
+            ESP_LOGE("LeleUpload", "Receive failed: result=%d errno=%d bytes=%u/%u", received,
+                     errno, unsigned(request->content_len - remaining),
+                     unsigned(request->content_len));
             psa_hash_abort(&hash);
             return Error(request, "500 Internal Server Error",
-                         "Transfer interrupted or SD write failed; file not saved.");
+                         "Upload connection closed or receive failed; file not saved.");
+        }
+        if (!file.Write(buffer.get(), received)) {
+            ESP_LOGE("LeleUpload", "SD write failed: errno=%d bytes=%u/%u chunk=%d", errno,
+                     unsigned(request->content_len - remaining), unsigned(request->content_len),
+                     received);
+            psa_hash_abort(&hash);
+            return Error(request, "500 Internal Server Error", "SD write failed; file not saved.");
+        }
+        const auto hash_result =
+            psa_hash_update(&hash, reinterpret_cast<const uint8_t*>(buffer.get()), received);
+        if (hash_result != PSA_SUCCESS) {
+            ESP_LOGE("LeleUpload", "Checksum update failed: status=%ld bytes=%u/%u",
+                     static_cast<long>(hash_result), unsigned(request->content_len - remaining),
+                     unsigned(request->content_len));
+            psa_hash_abort(&hash);
+            return Error(request, "500 Internal Server Error",
+                         "Upload checksum update failed; file not saved.");
         }
         remaining -= received;
+        last_progress = esp_timer_get_time();
         if (++chunks % 16 == 0)
             vTaskDelay(1);
     }

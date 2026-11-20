@@ -202,11 +202,13 @@ int main() {
 #include <net/if.h>
 using esp_err_t=int;
 constexpr int ESP_OK=0,ESP_FAIL=-1,HTTP_GET=0,HTTP_POST=1;
+constexpr int HTTPD_SOCK_ERR_TIMEOUT=-3;
 using httpd_handle_t=void*;
 struct httpd_req_t {
     void* user_ctx=nullptr;size_t content_len=0;std::string key,query,body,response,status;
     std::string confirm,revision;
     size_t read=0;int chunk=4;bool broken=false,cancel=false,slow=false;
+    unsigned timeouts=0;bool forever_timeout=false;
 };
 struct httpd_config_t {
     int server_port=0,ctrl_port=0,stack_size=0,task_priority=0,max_open_sockets=0;
@@ -247,8 +249,10 @@ inline int httpd_req_get_url_query_str(httpd_req_t* r,char* p,size_t n) {
 }
 void cancel_upload();
 void advance_time();
+void receive_timeout_time();
 inline int httpd_req_recv(httpd_req_t* r,char* p,size_t n) {
     if(r->broken)return -1;
+    if(r->timeouts||r->forever_timeout){if(r->timeouts)--r->timeouts;receive_timeout_time();return HTTPD_SOCK_ERR_TIMEOUT;}
     n=std::min({n,size_t(r->chunk),r->body.size()-r->read});
     std::memcpy(p,r->body.data()+r->read,n);r->read+=n;
     if(r->cancel){r->cancel=false;cancel_upload();}
@@ -256,6 +260,7 @@ inline int httpd_req_recv(httpd_req_t* r,char* p,size_t n) {
     return int(n);
 }
 ''',
+                "esp_log.h": "#pragma once\n#define ESP_LOGW(...) ((void)0)\n#define ESP_LOGE(...) ((void)0)\n",
                 "esp_netif.h": r'''
 #pragma once
 inline void* esp_netif_get_handle_from_ifkey(const char*) {return reinterpret_cast<void*>(1);}
@@ -316,6 +321,7 @@ inline int psa_hash_finish(int* op,uint8_t* out,size_t n,size_t* len){
 LeleWifiUpload* active=nullptr;
 void cancel_upload(){active->RequestStop();}
 void advance_time(){now+=61LL*1000000;}
+void receive_timeout_time(){now+=5LL*1000000;}
 void stop(LeleWifiUpload& upload){
     upload.RequestStop();assert(!upload.Stopped() && worker);
     auto fn=worker;worker=nullptr;fn(worker_arg);assert(upload.Stopped());
@@ -377,8 +383,18 @@ int main(){
     assert(routes[4].handler(&removed)==ESP_OK && upload.Saved()==5);
     nonempty.revision="5";
     assert(routes[4].handler(&nonempty)==ESP_OK && upload.Saved()==6);
+    auto retry=request(upload,"retry.mp3");retry.timeouts=2;
+    assert(call(upload,retry)==ESP_OK && retry.read==8);
+    assert(fs::exists(ROOT_DIR "/retry.mp3"));
+    auto idle=request(upload,"idle.mp3");idle.forever_timeout=true;
+    const auto idle_start=now;
+    assert(call(upload,idle)==ESP_FAIL && idle.status=="408 Request Timeout");
+    assert(now-idle_start==20LL*1000000 && idle.read==0);
+    assert(idle.response.find("receive timed out")!=std::string::npos);
+    assert(!fs::exists(ROOT_DIR "/idle.mp3"));
     auto broken=request(upload,"broken.mp3");broken.broken=true;
     assert(call(upload,broken)==ESP_FAIL && !fs::exists(ROOT_DIR "/broken.mp3"));
+    assert(broken.response.find("connection closed")!=std::string::npos);
     auto slow=request(upload,"slow.mp3");slow.slow=true;
     assert(call(upload,slow)==ESP_FAIL && slow.status=="408 Request Timeout");
     assert(!fs::exists(ROOT_DIR "/slow.mp3"));
