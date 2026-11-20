@@ -3,6 +3,12 @@
 ## Lele project handoff (read first)
 
 This repository extends XiaoZhi for the LiChuang Shizhanpai ESP32-S3.
+For cross-machine work, first read `docs/lele/AGENT_WORKFLOW.md` and
+`docs/lele/TESTING.md`, then the specific `docs/lele/testing/<release-tag>.md`.
+The development agent owns code/builds and the status index; the device-side agent
+appends version-specific flash/test evidence. Track source SHA, release package
+and actually flashed firmware separately. Never inherit a previous version's pass
+as a new version's test result. Preserve failed rounds when adding retest evidence.
 Before changes, read `docs/lele/HANDOFF.md`, `docs/lele/BUILD_FLASH.md`,
 `docs/lele/DEBUGGING.md`, and `docs/lele/VALIDATION.md`. They replace any reliance
 on prior chat history. For a new machine, follow `docs/lele/SETUP.md` first:
@@ -43,8 +49,11 @@ SD-wide MP3 indexing with a dual-slot SD cache, and a local USB diagnostic entry
   page snapshots bounded and select/revalidate paths rather than mutable indices.
 - Do not format the SD card, assume a music/ directory, or restore stock automatic
   OTA in music variants. Keep debug controls behind their separate Kconfig flag.
-- Update HANDOFF/VALIDATION when behavior or physical evidence changes. Distinguish
-  direct playback success from the earlier cloud-selected file failure whose
+- Record new release-specific test evidence in `docs/lele/testing/<release-tag>.md`
+  using its template; update TESTING with links and remaining work. HANDOFF covers
+  behavior/architecture changes, and VALIDATION retains historical evidence.
+  Keep firmware/logs/backups out of Git; release delivery rules are in AGENT_WORKFLOW.
+  Distinguish direct playback success from the earlier cloud-selected file failure whose
   precise cause has not yet been demonstrated. Do not invent acceptance results.
 
 

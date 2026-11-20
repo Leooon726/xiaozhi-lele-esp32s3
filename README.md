@@ -13,6 +13,11 @@
 5. **[验证记录](docs/lele/VALIDATION.md)**、**[开发历史](docs/lele/HISTORY.md)**、**[后续 OTA](docs/lele/OTA.md)**。
 6. Agent 开始工作前先读 [AGENTS.md](AGENTS.md)，无需本聊天历史。
 
+双机开发与实机测试：先读 **[Agent 协作流程](docs/lele/AGENT_WORKFLOW.md)** 和
+**[当前功能 / 版本测试状态](docs/lele/TESTING.md)**。每个测试包用独立版本记录
+交接，标明源码提交、Pre-release、逐项结果及未测项；记录格式见
+[测试交接模板](docs/lele/testing/TEMPLATE.md)。
+
 ## 曲库扩容与新菜单
 
 曲库上限从 128 提高至 1024，路径表移到连续 PSRAM 缓冲；满容量约 244 KiB，

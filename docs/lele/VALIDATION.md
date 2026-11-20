@@ -1,5 +1,10 @@
 # 验证记录和边界
 
+本文件保留既有验证历史。自双机交接流程建立后，新版本的逐项计划和结果写入
+`testing/<release-tag>.md`，通过 [TESTING.md](TESTING.md) 查索引和未测项；
+分工与证据规则见 [AGENT_WORKFLOW.md](AGENT_WORKFLOW.md)。旧章节的阶段状态
+不自动代表最新版或当前设备，历史用户验收不自动扩展到后续固件。
+
 ## 新环境 Setup（2026-11-20）
 
 Ubuntu Linux aarch64，新克隆源码 `8e85347`，官方 Docker 镜像

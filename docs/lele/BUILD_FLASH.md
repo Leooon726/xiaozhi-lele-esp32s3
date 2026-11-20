@@ -1,5 +1,10 @@
 # 构建、备份和烧录
 
+远程开发、本地烧录时，按 [AGENT_WORKFLOW.md](AGENT_WORKFLOW.md) 交接，
+从 [TESTING.md](TESTING.md) 选择明确测试版本。下载包需包含五分区文件及
+`flasher_args.json`，不能把当前 `build.py --zip` 的合并镜像 ZIP 当作保留
+NVS 的五文件测试包。每次实际刷入及验收结果写入对应版本记录。
+
 ## 新机器环境入口
 
 Windows / macOS / Linux 的完整准备步骤、固定版本、Docker 统一入口、原生

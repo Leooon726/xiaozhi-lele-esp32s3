@@ -2,6 +2,11 @@
 
 状态日期：2026-11-19。此文件与源码一起维护；事实变化时更新，不追加相互矛盾的“当前状态”。
 
+双机交接入口（2026-11-20）：[AGENT_WORKFLOW.md](AGENT_WORKFLOW.md) 定义
+开发端/实机端的分工；[TESTING.md](TESTING.md) 汇总当前功能与版本测试状态。
+新测试结果写入对应 `testing/<release-tag>.md`。下文保留分阶段历史叙述，
+其中“当前设备”“待验收”须结合段落时间阅读，不代表实时查询到的设备状态。
+
 新机器 setup 入口（2026-11-20）：见 [SETUP.md](SETUP.md)。统一 Docker
 包装脚本为 `scripts/lele/build_docker.py`，固定 IDF v6.1.1 和当前 debug 音乐
 变体；Linux aarch64 新克隆完整构建已通过。Windows/macOS Docker 尚未实测，
