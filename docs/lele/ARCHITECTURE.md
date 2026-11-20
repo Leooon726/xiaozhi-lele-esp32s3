@@ -22,6 +22,7 @@
 | `main/boards/lckfb/szpi-esp32s3/music_tools.cc` | SD 挂载、扫描任务、RAM 曲库、MCP、USB/按键测试入口 |
 | 同目录 `music_limits.h` / `music_paths.h` | 1024 首预算、连续 PSRAM 路径表与可失败增长 |
 | 同目录 `music_library.h` | 有预算的迭代遍历和无堆分配的文件名匹配 |
+| 同目录 `wifi_upload.*` / `wifi_upload_file.h` / `sd_file_manager.h` / `wifi_file_page.h` | 菜单会话内配对文件管理、路径保护、确认变更与覆盖恢复事务；未实机验收，见 WIFI_UPLOAD.md |
 | 同目录 `music_index_cache.h` | 双槽缓存、校验、世代选择、空闲扫描策略 |
 | 同目录 `music_debug_command.h` | 有限调试命令语法和编号边界 |
 | 同目录 `lichuang_dev_board.cc` | 初始化音乐工具、功能键短按/长按隔离 |

@@ -90,6 +90,62 @@ static void CheckOrientation(lv_display_t* display, lv_display_rotation_t rotati
         assert(lv_indev_search_obj(lv_layer_top(), &point) == button);
     }
     lv_obj_delete(overlay);
+
+    // New main menu keeps four vertical rows by pairing Display and Songs.
+    // Reserve the production 28px title and 48px message even with a small host font.
+    overlay = lv_obj_create(lv_layer_top());
+    lv_obj_set_size(overlay, lv_pct(100), lv_pct(100));
+    lv_obj_center(overlay);
+    lv_obj_set_style_pad_all(overlay, 6, 0);
+    lv_obj_set_style_pad_row(overlay, 4, 0);
+    lv_obj_set_flex_flow(overlay, LV_FLEX_FLOW_COLUMN);
+    auto* menu_title = lv_label_create(overlay);
+    lv_obj_set_height(menu_title, 28);
+    auto* message = lv_label_create(overlay);
+    lv_obj_set_size(message, lv_pct(100), 48);
+    auto* usb = CreateLeleButton(overlay, "USB File Transfer", false);
+    auto* wifi = CreateLeleButton(overlay, "Wi-Fi File Transfer", false);
+    auto* menu_row = CreateSongListFooter(overlay);
+    lv_obj_set_height(menu_row, 32);
+    auto* display_button = CreateLeleButton(menu_row, "Display", false);
+    auto* songs = CreateLeleButton(menu_row, "Songs", false);
+    for (auto* button : {display_button, songs}) {
+        lv_obj_set_width(button, 0);
+        lv_obj_set_flex_grow(button, 1);
+    }
+    back = CreateLeleButton(overlay, "Back", false);
+    lv_obj_update_layout(overlay);
+    for (auto* button : {usb, wifi, display_button, songs, back}) {
+        lv_area_t area;
+        lv_obj_get_coords(button, &area);
+        assert(area.x1 >= 0 && area.x2 < width && area.y1 >= 0 && area.y2 < height);
+        lv_point_t point{(area.x1 + area.x2) / 2, (area.y1 + area.y2) / 2};
+        assert(lv_indev_search_obj(lv_layer_top(), &point) == button);
+    }
+    // Upload session replaces the menu; the small status text and End button
+    // remain readable/reachable in both orientations.
+    lv_obj_clean(overlay);
+    menu_title = lv_label_create(overlay);
+    lv_obj_set_height(menu_title, 28);
+    message = lv_label_create(overlay);
+    lv_obj_set_width(message, lv_pct(100));
+    lv_obj_set_height(message, 0);
+    lv_obj_set_flex_grow(message, 1);
+    lv_obj_set_style_text_font(message, LV_FONT_DEFAULT, 0);
+    lv_label_set_long_mode(message, LV_LABEL_LONG_WRAP);
+    lv_label_set_text(message,
+                      "http://192.168.100.100:8080\nCode: 12345678\nChanges: 100\n"
+                      "64 MiB/file; 10-minute session\nManage SD files in browser.\n"
+                      "End transfer to update Songs.");
+    auto* end = CreateLeleButton(overlay, "End Wi-Fi Transfer", false);
+    lv_obj_update_layout(overlay);
+    assert(lv_obj_get_height(message) >= 7 * lv_font_get_line_height(LV_FONT_DEFAULT));
+    lv_area_t end_area;
+    lv_obj_get_coords(end, &end_area);
+    assert(end_area.y2 < height);
+    lv_point_t end_point{(end_area.x1 + end_area.x2) / 2, (end_area.y1 + end_area.y2) / 2};
+    assert(lv_indev_search_obj(lv_layer_top(), &end_point) == end);
+    lv_obj_delete(overlay);
 }
 
 int main() {

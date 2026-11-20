@@ -10,5 +10,8 @@ bool RequestLichuangMusicPath(const std::string& path);
 void BeginLichuangStorageTransfer();
 void CancelLichuangStorageTransfer();
 bool IsLichuangStorageQuiet();
+bool IsLichuangStorageReadyForUpload();
+bool MarkLichuangStorageDirty();     // Persist before enabling network writes.
+bool FinishLichuangStorageUpload();  // Release gate and queue a fresh index.
 bool UnmountLichuangMusicCard();
 void InitializeLichuangMusicTools(bool refresh_immediately = false);

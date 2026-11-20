@@ -20,6 +20,9 @@
 #include "music_index_cache.h"
 #include "music_library.h"
 #include "music_storage.h"
+#ifdef CONFIG_LICHUANG_USB_STORAGE
+#include <nvs.h>
+#endif
 #ifdef CONFIG_LICHUANG_TF_MUSIC_DEBUG
 #include <fcntl.h>
 #include <unistd.h>
@@ -29,6 +32,28 @@
 #endif
 
 namespace {
+#ifdef CONFIG_LICHUANG_USB_STORAGE
+bool IndexNeedsRefresh() {
+    nvs_handle_t handle;
+    const auto opened = nvs_open("lele_files", NVS_READONLY, &handle);
+    if (opened != ESP_OK)
+        return opened != ESP_ERR_NVS_NOT_FOUND;
+    uint8_t dirty = 0;
+    const auto result = nvs_get_u8(handle, "dirty", &dirty);
+    nvs_close(handle);
+    return result == ESP_OK ? dirty != 0 : result != ESP_ERR_NVS_NOT_FOUND;
+}
+
+bool WriteIndexDirty(bool dirty) {
+    nvs_handle_t handle;
+    if (nvs_open("lele_files", NVS_READWRITE, &handle) != ESP_OK)
+        return false;
+    const bool saved =
+        nvs_set_u8(handle, "dirty", dirty ? 1 : 0) == ESP_OK && nvs_commit(handle) == ESP_OK;
+    nvs_close(handle);
+    return saved;
+}
+#endif
 std::mutex card_mutex;
 sdmmc_card_t* card = nullptr;
 TfMusic::MusicPaths library;
@@ -135,6 +160,10 @@ void RunScan(bool load_cache) {
     if (saved) {
         active_cache_slot = next_slot;
         cache_generation = next_generation;
+#ifdef CONFIG_LICHUANG_USB_STORAGE
+        if (IndexNeedsRefresh() && !WriteIndexDirty(false))
+            ESP_LOGW(kTag, "Index saved; could not clear pending rebuild marker");
+#endif
     }
     ESP_LOGI(kTag, "Scan complete: %u MP3 tracks, cache saved=%d", unsigned(index.paths.size()),
              saved);
@@ -328,6 +357,27 @@ bool IsLichuangStorageQuiet() {
     return storage_pending && !scanning;
 }
 
+bool IsLichuangStorageReadyForUpload() {
+    std::lock_guard<std::mutex> lock(card_mutex);
+    return storage_pending && !scanning && card != nullptr;
+}
+
+#ifdef CONFIG_LICHUANG_USB_STORAGE
+bool MarkLichuangStorageDirty() { return WriteIndexDirty(true); }
+#endif
+
+bool FinishLichuangStorageUpload() {
+    std::lock_guard<std::mutex> lock(card_mutex);
+    if (!storage_pending || scanning)
+        return false;
+    // Rename/delete can invalidate existing paths. Do not replay a stale RAM
+    // index while the new scan (or a failed task allocation) is outstanding.
+    ready = false;
+    ++library_revision;
+    storage_pending = false;
+    return StartScanLocked(true);
+}
+
 bool UnmountLichuangMusicCard() {
     std::lock_guard<std::mutex> lock(card_mutex);
     if (!storage_pending || scanning)
@@ -341,6 +391,9 @@ bool UnmountLichuangMusicCard() {
 }
 
 void InitializeLichuangMusicTools(bool refresh_immediately) {
+#ifdef CONFIG_LICHUANG_USB_STORAGE
+    refresh_immediately = refresh_immediately || IndexNeedsRefresh();
+#endif
 #ifdef CONFIG_LICHUANG_TF_MUSIC_DEBUG
     if (xTaskCreate(DebugSerialTask, "music_debug", 4096, nullptr, 1, nullptr) != pdPASS)
         ESP_LOGE("TfMusicDebug", "Cannot create USB diagnostic task");

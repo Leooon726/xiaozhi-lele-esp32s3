@@ -7,6 +7,7 @@
 #include <memory>
 #include "assistant_tap.h"
 #include "music_browser.h"
+#include "wifi_upload.h"
 
 class Display;
 class Backlight;
@@ -28,6 +29,7 @@ private:
     enum class Action {
         None,
         Enter,
+        WifiEnter,
         Close,
         Return,
         DisplaySettings,
@@ -58,6 +60,12 @@ private:
     bool preparing_ = false;
     bool restart_to_transfer_ = false;
     bool usb_ready_ = false;
+    LeleWifiUpload wifi_upload_;
+    bool wifi_transfer_ = false;
+    bool wifi_started_ = false;
+    bool wifi_closing_ = false;
+    unsigned wifi_saved_ = 0;
+    const char* wifi_exit_message_ = "Transfer ended.";
     int64_t prepare_started_ = 0;
     esp_timer_handle_t timer_ = nullptr;
     lv_obj_t* overlay_ = nullptr;
@@ -92,7 +100,8 @@ private:
     void Message(const char* text);
     void Close();
     void Poll();
-    void Enter();
+    void Enter(bool network = false);
+    void PollWifiUpload();
     void Return();
     lv_obj_t* AddButton(const char* label, Action action, unsigned slot, lv_obj_t* parent = nullptr,
                         const std::string& path = {});

@@ -17,6 +17,7 @@
 #include "settings.h"
 #include "song_list_layout.h"
 #include "usb_transfer.h"
+#include "wifi_manager.h"
 
 LV_FONT_DECLARE(BUILTIN_TEXT_FONT);
 
@@ -114,13 +115,19 @@ void LeleMenu::Show(const char* text, bool transfer) {
     ResetOverlay();
     {
         auto* title = lv_label_create(overlay_);
-        lv_label_set_text(
-            title, transfer ? "USB File Transfer" : (display_settings_ ? "Display" : "Lele Menu"));
+        lv_label_set_text(title, transfer         ? "USB File Transfer"
+                                 : wifi_transfer_ ? "Wi-Fi File Transfer"
+                                                  : (display_settings_ ? "Display" : "Lele Menu"));
         message_ = lv_label_create(overlay_);
         lv_obj_set_width(message_, lv_pct(100));
         lv_obj_set_height(message_, display_settings_ ? 28 : 48);
         lv_label_set_long_mode(message_, LV_LABEL_LONG_WRAP);
-        if (transfer) {
+        if (wifi_transfer_) {
+            lv_obj_set_height(message_, 0);
+            lv_obj_set_flex_grow(message_, 1);
+            lv_obj_set_style_text_font(message_, LV_FONT_DEFAULT, 0);
+            AddButton("End Wi-Fi Transfer", Action::Close, 0);
+        } else if (transfer) {
             AddButton("Return to Assistant", Action::Return, 0);
         } else if (display_settings_) {
             AddButton(IsDark() ? "Theme: Dark" : "Theme: Light", Action::Theme, 0);
@@ -142,8 +149,15 @@ void LeleMenu::Show(const char* text, bool transfer) {
             AddButton("Back", Action::MainMenu, 3);
         } else {
             AddButton("USB File Transfer", Action::Enter, 0);
-            AddButton("Display", Action::DisplaySettings, 1);
-            AddButton("Songs", Action::Songs, 2);
+            AddButton("Wi-Fi File Transfer", Action::WifiEnter, 4);
+            auto* row = CreateSongListFooter(overlay_);
+            lv_obj_set_height(row, 32);
+            auto* display = AddButton("Display", Action::DisplaySettings, 1, row);
+            auto* songs = AddButton("Songs", Action::Songs, 2, row);
+            for (auto* button : {display, songs}) {
+                lv_obj_set_width(button, 0);
+                lv_obj_set_flex_grow(button, 1);
+            }
             AddButton("Back", Action::Close, 3);
         }
     }
@@ -154,7 +168,7 @@ void LeleMenu::Show(const char* text, bool transfer) {
 }
 
 void LeleMenu::ShowDisplaySettings() {
-    if (preparing_ || transfer_boot_ || restart_to_transfer_)
+    if (preparing_ || transfer_boot_ || restart_to_transfer_ || wifi_transfer_)
         return;
     display_settings_ = true;
     songs_page_ = false;
@@ -166,7 +180,7 @@ void LeleMenu::ShowDisplaySettings() {
 }
 
 void LeleMenu::ShowSongs(size_t offset) {
-    if (preparing_ || transfer_boot_ || restart_to_transfer_)
+    if (preparing_ || transfer_boot_ || restart_to_transfer_ || wifi_transfer_)
         return;
     auto page = GetLichuangMusicPage(offset);  // Releases card mutex before LVGL lock.
     if (!lvgl_port_lock(1000))
@@ -354,6 +368,11 @@ void LeleMenu::Message(const char* text) {
 }
 
 void LeleMenu::Close() {
+    if (wifi_transfer_) {
+        wifi_closing_ = true;
+        Message("Finishing transfer...\nPlease wait.");
+        return;
+    }
     if (preparing_ || transfer_boot_ || restart_to_transfer_)
         return;
     if (lvgl_port_lock(1000)) {
@@ -389,7 +408,9 @@ bool LeleMenu::HandleClick() {
     return true;
 }
 
-void LeleMenu::Enter() {
+void LeleMenu::Enter(bool network) {
+    if (wifi_transfer_ || transfer_boot_)
+        return;
     if (restart_to_transfer_)
         esp_restart();
     if (preparing_)
@@ -400,11 +421,83 @@ void LeleMenu::Enter() {
         Message("Finish the conversation, then try again.");
         return;
     }
+    if (network && !WifiManager::GetInstance().IsConnected()) {
+        Message("Connect Wi-Fi first.");
+        return;
+    }
+    wifi_transfer_ = network;
+    if (network)
+        display_settings_ = songs_page_ = false;
+    wifi_started_ = false;
+    wifi_closing_ = false;
+    wifi_exit_message_ = "Transfer ended.";
     preparing_ = true;
     prepare_started_ = esp_timer_get_time();
     BeginLichuangStorageTransfer();
     app.SetMusicStorageBlocked(true);
-    Message("Stopping music and saving index...\nPlease wait.");
+    if (network)
+        Show("Stopping music and saving index...\nPlease wait.");
+    else
+        Message("Stopping music and saving index...\nPlease wait.");
+}
+
+void LeleMenu::PollWifiUpload() {
+    auto& app = Application::GetInstance();
+    if (wifi_closing_) {
+        wifi_upload_.RequestStop();
+        if (!wifi_upload_.Stopped())
+            return;
+        // HTTP task has returned and closed its files before scans/playback resume.
+        bool refresh = true;
+        if (wifi_started_)
+            refresh = FinishLichuangStorageUpload();
+        else
+            CancelLichuangStorageTransfer();
+        app.SetMusicStorageBlocked(false);
+        preparing_ = wifi_transfer_ = wifi_started_ = wifi_closing_ = false;
+        Show(refresh ? wifi_exit_message_ : "Index refresh failed; retry.");
+        return;
+    }
+    if (preparing_) {
+        if (esp_timer_get_time() - prepare_started_ > 30000000) {
+            wifi_exit_message_ = "SD busy; try again.";
+            wifi_closing_ = true;
+            Message("SD is still busy.\nClosing transfer...");
+            return;
+        }
+        if (app.IsMusicWorkerBusy() || !IsLichuangStorageQuiet())
+            return;
+        const char* failure = nullptr;
+        if (!IsLichuangStorageReadyForUpload())
+            failure = "SD not ready.";
+        else if (!MarkLichuangStorageDirty())
+            failure = "Cannot save SD state.";
+        else if (!wifi_upload_.Start())
+            failure = "Cannot start Wi-Fi server.";
+        if (failure) {
+            wifi_exit_message_ = failure;
+            wifi_closing_ = true;
+            Message(failure);
+            return;
+        }
+        preparing_ = false;
+        wifi_started_ = true;
+        wifi_saved_ = unsigned(-1);
+    }
+    if (wifi_upload_.NeedsStop() || !WifiManager::GetInstance().IsConnected()) {
+        wifi_closing_ = true;
+        Message("Session ended.\nClosing transfer...");
+        return;
+    }
+    if (wifi_saved_ != wifi_upload_.Saved()) {
+        wifi_saved_ = wifi_upload_.Saved();
+        char text[200];
+        std::snprintf(text, sizeof(text),
+                      "%s\nCode: %s\nChanges: %u\n64 MiB/file; 10-minute session\n"
+                      "Manage SD files in browser.\nEnd transfer to update Songs.",
+                      wifi_upload_.Address().c_str(), wifi_upload_.Code(), wifi_saved_);
+        Message(text);
+    }
 }
 
 void LeleMenu::Return() {
@@ -468,7 +561,7 @@ void LeleMenu::Poll() {
             ChangeOrientation();
             break;
         case Action::MainMenu:
-            if (!preparing_ && !transfer_boot_ && !restart_to_transfer_) {
+            if (!preparing_ && !transfer_boot_ && !restart_to_transfer_ && !wifi_transfer_) {
                 display_settings_ = false;
                 songs_page_ = false;
                 Show("Manage SD card files on your Mac.");
@@ -476,6 +569,9 @@ void LeleMenu::Poll() {
             break;
         case Action::Enter:
             Enter();
+            break;
+        case Action::WifiEnter:
+            Enter(true);
             break;
         case Action::Close:
             Close();
@@ -497,6 +593,10 @@ void LeleMenu::Poll() {
             ESP_LOGI("LeleTouch", "Assistant tap in state %d", state);
             app.ToggleChatState();
         }
+    }
+    if (wifi_transfer_) {
+        PollWifiUpload();
+        return;
     }
     if (!preparing_)
         return;

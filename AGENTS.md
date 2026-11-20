@@ -49,6 +49,11 @@ SD-wide MP3 indexing with a dual-slot SD cache, and a local USB diagnostic entry
   page snapshots bounded and select/revalidate paths rather than mutable indices.
 - Do not format the SD card, assume a music/ directory, or restore stock automatic
   OTA in music variants. Keep debug controls behind their separate Kconfig flag.
+- Wi-Fi SD file management (F-009, not yet device-tested): read `docs/lele/WIFI_UPLOAD.md`.
+  Keep explicit paired sessions; overwrite/delete/move require confirmation and a
+  fresh session revision. Protect hidden caches, retain recovery copies on failed
+  replacement, persist the rescan marker before writing, and keep storage gated
+  until HTTP/files are fully closed. Never overlap with USB MSC ownership.
 - Record new release-specific test evidence in `docs/lele/testing/<release-tag>.md`
   using its template; update TESTING with links and remaining work. HANDOFF covers
   behavior/architecture changes, and VALIDATION retains historical evidence.
