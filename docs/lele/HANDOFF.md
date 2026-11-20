@@ -213,5 +213,6 @@ PERFORMANCE。WifiBoard 此接口只控制 Wi-Fi modem sleep，不是 CPU 满频
 stock 无音乐变体及其他板型不变。这样协议关闭/回 idle 的 LOW_POWER 请求也不会
 重新启用 Wi-Fi 休眠。增加耗电，电池续航影响待实测；声音断续不能因此算已修复。
 f2d91ff 已按本次授权完成 16 MiB 备份/校验、五文件写入和 NVS 保留检查。
-启动 idle 实际 PERFORMANCE/NONE，340 首缓存/扫描通过；待机上传及语音专项
-尚未验收，见 [版本记录](testing/test-f2d91ff9dcdf-01.md)。
+启动 idle 实际 PERFORMANCE/NONE，340 首缓存/扫描通过；待机根目录 1 MiB 8.191 秒、子目录 1 MiB
+5.263 秒自动上传成功，摘要匹配且自身诊断对象清理成功；手机上传、结束后
+点播及语音专项尚待确认，见 [版本记录](testing/test-f2d91ff9dcdf-01.md)。
