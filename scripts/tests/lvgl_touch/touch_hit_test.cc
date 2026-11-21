@@ -5,7 +5,9 @@
 #include "assistant_touch_region.h"
 #include "lele_display_layout.h"
 #include "song_list_layout.h"
+#include "squirrel_layout.h"
 #include "src/draw/lv_image_decoder_private.h"
+#include "src/draw/snapshot/lv_snapshot.h"
 #include "src/misc/cache/instance/lv_image_cache.h"
 #include "src/misc/cache/instance/lv_image_header_cache.h"
 
@@ -34,6 +36,59 @@ static void CheckSquirrelImages() {
         lv_image_cache_drop(&image);
         lv_image_header_cache_drop(&image);
     }
+}
+
+static void CheckSquirrelClipping(int width, int height, bool legacy) {
+    auto* root = lv_obj_create(lv_screen_active());
+    lv_obj_remove_style_all(root);
+    lv_obj_set_size(root, width, height);
+    lv_obj_set_style_bg_color(root, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(root, LV_OPA_COVER, 0);
+    auto* box = lv_obj_create(root);
+    lv_obj_remove_style_all(box);
+    lv_obj_set_size(box, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_center(box);
+    std::vector<uint8_t> pixels(144 * 144 * 3, 255);
+    lv_image_dsc_t source{};
+    source.header.magic = LV_IMAGE_HEADER_MAGIC;
+    source.header.cf = LV_COLOR_FORMAT_RGB888;
+    source.header.w = source.header.h = 144;
+    source.header.stride = 144 * 3;
+    source.data = pixels.data();
+    source.data_size = pixels.size();
+    auto* image = lv_image_create(box);
+    lv_image_set_src(image, &source);
+    lv_obj_center(image);
+    if (legacy) {
+        lv_image_set_scale(image, 461);
+        lv_obj_add_flag(box, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
+    } else {
+        ConfigureSquirrelLayout(box, image);
+    }
+    lv_obj_update_layout(root);
+    auto* snapshot = lv_snapshot_take(root, LV_COLOR_FORMAT_RGB888);
+    assert(snapshot);
+    unsigned outside = 0;
+    const int left = (width - 144) / 2, top = (height - 144) / 2;
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            const auto* pixel = snapshot->data + y * snapshot->header.stride + x * 3;
+            if ((x < left || x >= left + 144 || y < top || y >= top + 144) && pixel[0] > 200 &&
+                pixel[1] > 200 && pixel[2] > 200)
+                ++outside;
+        }
+    }
+    // Verify actual rendered pixels, not only the configured scale/overflow flag.
+    if (legacy) {
+        assert(outside == 0);  // Reproduce the clipped 54b5300 firmware.
+    } else {
+        assert(outside > 20000);
+        assert(lv_obj_get_width(box) == width && lv_obj_get_height(box) == height);
+    }
+    lv_draw_buf_destroy(snapshot);
+    lv_obj_delete(root);
+    lv_image_cache_drop(&source);
+    lv_image_header_cache_drop(&source);
 }
 
 static void CheckSongScrolling(int width) {
@@ -80,6 +135,9 @@ static void CheckOrientation(lv_display_t* display, lv_display_rotation_t rotati
         assert(point.y == (rotation == LV_DISPLAY_ROTATION_0 ? base.y : base.x));
         assert(lv_indev_search_obj(lv_screen_active(), &point) == region);
     }
+
+    CheckSquirrelClipping(width, height, true);
+    CheckSquirrelClipping(width, height, false);
 
     // Exercise the same responsive widget policy used by LeleLcdDisplay, with
     // existing subtitle text retained across both screen sizes.

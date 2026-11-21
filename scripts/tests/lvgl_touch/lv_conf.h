@@ -8,3 +8,5 @@
 #define LV_USE_THORVG_EXTERNAL 0
 #define LV_BUILD_EXAMPLES 0
 #define LV_BUILD_DEMOS 0
+
+#define LV_USE_SNAPSHOT 1

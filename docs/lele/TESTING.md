@@ -9,7 +9,8 @@
 - 最新本地候选：[1.8 倍松鼠 test-54b53009b4ad-01](testing/test-54b53009b4ad-01.md)，
   源码 54b53009b4ad；完整 debug 构建、五文件校验及 2 项相关回归通过。
   未发布 Release；Mac 已按本次授权刷入 54b53009b4ad，启动 idle/346 首
-  缓存和扫描/PERFORMANCE(NONE) 正常，用户报告中央方形裁剪，E-01 失败，E-02 未测；修复中。
+  缓存和扫描/PERFORMANCE(NONE) 正常，用户报告中央方形裁剪，E-01 失败，E-02 未测；已开发全视口透明父容器修复，
+  旧/新像素渲染对照及表情回归通过，完整编译中；尚未再次刷入。
 
 - 首选待测：[松鼠表情 test-d0b44f2d3f6c-01](testing/test-d0b44f2d3f6c-01.md)，源码 d0b44f2d3f6ce065c8cc5fde36bac5ab5ecabd82。
   已发布 Pre-release 并下载回读核对；本版不含自动息屏。227 项主机（5 skip）、
