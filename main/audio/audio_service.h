@@ -126,6 +126,9 @@ public:
     bool IsVoiceDetected() const { return voice_detected_; }
     bool IsIdle();
     bool IsPlaybackIdle();
+#ifdef CONFIG_LICHUANG_TF_MUSIC_DEBUG
+    void LogPlaybackDiagnostics();
+#endif
     bool IsWakeWordRunning() const {
         return xEventGroupGetBits(event_group_) & AS_EVENT_WAKE_WORD_RUNNING;
     }
@@ -175,6 +178,13 @@ private:
     int decoder_frame_size_ = 0;
     DebugStatistics debug_statistics_;
     int64_t last_encode_drop_log_time_ = 0;
+#ifdef CONFIG_LICHUANG_TF_MUSIC_DEBUG
+    // Protected by audio_queue_mutex_; cumulative since boot.
+    uint32_t audio_diag_received_ = 0;
+    uint32_t audio_diag_queue_drops_ = 0;
+    uint32_t audio_diag_generation_drops_ = 0;
+    size_t audio_diag_decode_high_water_ = 0;
+#endif
     srmodel_list_t* models_list_ = nullptr;
 
     EventGroupHandle_t event_group_;

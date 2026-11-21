@@ -1,5 +1,6 @@
 #include "audio_service.h"
 #include <esp_log.h>
+#include <algorithm>
 #include <cstring>
 
 #define RATE_CVT_CFG(_src_rate, _dest_rate, _channel)                                        \
@@ -632,6 +633,9 @@ bool AudioService::PushMusicPcm(std::vector<int16_t>&& pcm, uint32_t playback_id
 bool AudioService::PushPacketToDecodeQueue(std::unique_ptr<AudioStreamPacket> packet, bool wait) {
     std::unique_lock<std::mutex> lock(audio_queue_mutex_);
     const uint32_t generation = playback_generation_;
+#ifdef CONFIG_LICHUANG_TF_MUSIC_DEBUG
+    ++audio_diag_received_;
+#endif
     if (audio_decode_queue_.size() >= MAX_DECODE_PACKETS_IN_QUEUE) {
         if (wait) {
             audio_queue_cv_.wait(lock, [this, generation]() {
@@ -639,17 +643,53 @@ bool AudioService::PushPacketToDecodeQueue(std::unique_ptr<AudioStreamPacket> pa
                        audio_decode_queue_.size() < MAX_DECODE_PACKETS_IN_QUEUE;
             });
         } else {
+#ifdef CONFIG_LICHUANG_TF_MUSIC_DEBUG
+            ++audio_diag_queue_drops_;
+#endif
             return false;
         }
     }
     if (service_stopped_.load() || generation != playback_generation_) {
+#ifdef CONFIG_LICHUANG_TF_MUSIC_DEBUG
+        ++audio_diag_generation_drops_;
+#endif
         return false;
     }
     playback_drained_notified_ = false;
     audio_decode_queue_.push_back(std::move(packet));
+#ifdef CONFIG_LICHUANG_TF_MUSIC_DEBUG
+    audio_diag_decode_high_water_ =
+        std::max(audio_diag_decode_high_water_, audio_decode_queue_.size());
+#endif
     audio_queue_cv_.notify_all();
     return true;
 }
+
+#ifdef CONFIG_LICHUANG_TF_MUSIC_DEBUG
+void AudioService::LogPlaybackDiagnostics() {
+    uint32_t received, queue_drops, generation_drops;
+    size_t decode_q, pcm_q, high_water;
+    bool decoding, outputting;
+    {
+        std::lock_guard<std::mutex> lock(audio_queue_mutex_);
+        received = audio_diag_received_;
+        queue_drops = audio_diag_queue_drops_;
+        generation_drops = audio_diag_generation_drops_;
+        decode_q = audio_decode_queue_.size();
+        pcm_q = audio_playback_queue_.size();
+        high_water = audio_diag_decode_high_water_;
+        decoding = decode_in_flight_;
+        outputting = output_in_flight_;
+    }
+    // Log outside the queue lock and from the main task, never per packet.
+    ESP_LOGI("AudioDiag",
+             "decode_seen=%lu queue_drop=%lu generation_drop=%lu decode_q=%u pcm_q=%u "
+             "max_decode_q=%u decoding=%d outputting=%d",
+             static_cast<unsigned long>(received), static_cast<unsigned long>(queue_drops),
+             static_cast<unsigned long>(generation_drops), unsigned(decode_q), unsigned(pcm_q),
+             unsigned(high_water), decoding, outputting);
+}
+#endif
 
 std::unique_ptr<AudioStreamPacket> AudioService::PopPacketFromSendQueue() {
     std::lock_guard<std::mutex> lock(audio_queue_mutex_);

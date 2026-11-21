@@ -309,6 +309,12 @@ void Application::Run() {
             auto display = Board::GetInstance().GetDisplay();
             display->UpdateStatusBar();
 
+#ifdef CONFIG_LICHUANG_TF_MUSIC_DEBUG
+            if (clock_ticks_ % 5 == 0 && (GetDeviceState() == kDeviceStateSpeaking ||
+                                          GetDeviceState() == kDeviceStateListening)) {
+                audio_service_.LogPlaybackDiagnostics();
+            }
+#endif
             // Print debug info every 10 seconds
             if (clock_ticks_ % 10 == 0) {
                 SystemInfo::PrintHeapStats();
@@ -1395,7 +1401,8 @@ void Application::HandleNotificationFinished(uint32_t playback_id, bool success)
 #ifdef CONFIG_LICHUANG_TF_MUSIC
     if (was_music) {
         music_status_ = success ? 3 : 4;
-        if (!success && music_failure_callback_) music_failure_callback_();
+        if (!success && music_failure_callback_)
+            music_failure_callback_();
     }
 #else
     (void)was_music;
