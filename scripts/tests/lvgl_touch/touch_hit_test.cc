@@ -102,7 +102,8 @@ static void CheckSongScrolling(int width) {
         auto* button = CreateLeleButton(lv_layer_top(), "Short", true);
         lv_obj_set_width(button, width - 12);
         ConfigureSongListButton(button, font);
-        auto* label = lv_obj_get_child(button, 0);
+        auto* viewport = lv_obj_get_child(button, 0);
+        auto* label = lv_obj_get_child(viewport, 0);
         lv_obj_update_layout(button);
         assert(lv_obj_get_content_height(label) == lv_font_get_line_height(font));
         assert(lv_anim_get(label, nullptr) == nullptr);
@@ -110,11 +111,53 @@ static void CheckSongScrolling(int width) {
             label, "A very long song name that cannot fit in either screen orientation at all");
         lv_obj_update_layout(button);
         auto* animation = lv_anim_get(label, nullptr);
-        assert(animation && -animation->end_value > lv_obj_get_content_width(label));
+        const auto overflow = lv_obj_get_width(label) - lv_obj_get_content_width(viewport);
+        assert(animation && animation->start_value == 0 && animation->end_value == -overflow);
+        assert(animation->reverse_duration == 0 && animation->repeat_delay == 1000);
+        const auto duration = animation->duration;
+        auto advance = [&](uint32_t ms) {
+            lv_tick_inc(ms);
+            lv_timer_ready(lv_anim_get_timer());
+            lv_timer_handler();
+            lv_obj_update_layout(button);
+        };
+        advance(duration / 2);
+        assert(lv_obj_get_x(label) < 0 && lv_obj_get_x(label) > -overflow);
+        advance(duration - duration / 2);
+        assert(lv_obj_get_x(label) == -overflow);  // Last character is fully visible.
+        advance(500);
+        assert(lv_obj_get_x(label) == -overflow);
+        advance(499);
+        assert(lv_obj_get_x(label) == -overflow);
+        advance(1);
+        assert(lv_obj_get_x(label) == 0);  // Jump rather than animate backwards.
         assert(lv_obj_get_content_height(label) == lv_font_get_line_height(font));
         lv_label_set_text(label, "Short");
         lv_obj_update_layout(button);
         assert(lv_anim_get(label, nullptr) == nullptr);
+        assert(lv_obj_get_x(label) == 0);
+
+        // The same name fits landscape but overflows portrait. Resizing the
+        // existing row must stop/restart with the new actual viewport width.
+        lv_obj_set_width(button, 240 - 12);
+        lv_obj_update_layout(button);
+        const auto narrow = lv_obj_get_content_width(viewport);
+        std::string medium = "Song";
+        while (lv_obj_get_width(label) <= narrow) {
+            medium += 'M';
+            lv_label_set_text(label, medium.c_str());
+            lv_obj_update_layout(button);
+        }
+        assert(lv_anim_get(label, nullptr));
+        lv_obj_set_width(button, 320 - 12);
+        lv_obj_update_layout(button);
+        assert(lv_obj_get_width(label) <= lv_obj_get_content_width(viewport));
+        assert(!lv_anim_get(label, nullptr) && lv_obj_get_x(label) == 0);
+        lv_obj_set_width(button, 240 - 12);
+        lv_obj_update_layout(button);
+        animation = lv_anim_get(label, nullptr);
+        assert(animation && animation->end_value ==
+                                lv_obj_get_content_width(viewport) - lv_obj_get_width(label));
         lv_obj_delete(button);
     }
 }
@@ -352,9 +395,10 @@ int main() {
             assert(area.y1 >= 0 && area.y2 < footer_area.y1);
             assert(area.x1 >= 0 && area.x2 < width);
             assert(lv_obj_get_height(button) == 30);
-            auto* label = lv_obj_get_child(button, 0);
+            auto* viewport = lv_obj_get_child(button, 0);
+            auto* label = lv_obj_get_child(viewport, 0);
             assert(lv_obj_get_height(label) == lv_font_get_line_height(LV_FONT_DEFAULT));
-            assert(lv_label_get_long_mode(label) == LV_LABEL_LONG_SCROLL_CIRCULAR);
+            assert(lv_label_get_long_mode(label) == LV_LABEL_LONG_CLIP);
             lv_point_t point{(area.x1 + area.x2) / 2, (area.y1 + area.y2) / 2};
             assert(lv_indev_search_obj(lv_layer_top(), &point) == button);
         }
