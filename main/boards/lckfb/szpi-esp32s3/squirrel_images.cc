@@ -19,8 +19,8 @@ lv_image_dsc_t Image(const uint8_t* start, const uint8_t* end) {
     lv_image_dsc_t result{};
     result.header.magic = LV_IMAGE_HEADER_MAGIC;
     result.header.cf = LV_COLOR_FORMAT_RAW_ALPHA;
-    result.header.w = 144;
-    result.header.h = 144;
+    result.header.w = kSquirrelImageSize;
+    result.header.h = kSquirrelImageSize;
     result.data_size = end - start;
     result.data = start;
     return result;
