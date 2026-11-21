@@ -94,6 +94,10 @@ private:
         const auto* image = GetSquirrelImage(expression);
         if (lv_image_get_src(emoji_image_) != image)
             lv_image_set_src(emoji_image_, image);
+        // LVGL uses 256 for 1x; keep the original center and all seven sources.
+        lv_image_set_scale(emoji_image_, 461);  // 1.8x, rounded to LVGL precision.
+        if (emoji_box_)
+            lv_obj_add_flag(emoji_box_, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
         emotion_uses_image_ = true;
         ShowEmotion();
         lvgl_port_unlock();

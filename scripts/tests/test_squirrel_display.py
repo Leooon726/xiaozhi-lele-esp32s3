@@ -23,6 +23,11 @@ class SquirrelDisplayTests(unittest.TestCase):
 #include "squirrel_expression.h"
 bool lock_ok=true,locked=false;
 unsigned stopped=0,draws=0;
+unsigned scale=0;
+bool overflow_visible=false;
+constexpr int LV_OBJ_FLAG_OVERFLOW_VISIBLE=1;
+void lv_image_set_scale(void*,unsigned value){assert(locked);scale=value;}
+void lv_obj_add_flag(void*,int flag){assert(locked && flag==LV_OBJ_FLAG_OVERFLOW_VISIBLE);overflow_visible=true;}
 SquirrelExpression selected=SquirrelExpression::Unsupported;
 const SquirrelExpression* current_image=nullptr;
 bool lvgl_port_lock(int){assert(!locked);locked=lock_ok;return locked;}
@@ -44,6 +49,7 @@ struct Gif {void Stop(){assert(locked);++stopped;}};
 struct SpiLcdDisplay {
     bool setup=false,shown=false,emotion_uses_image_=false;
     void* emoji_image_=this;
+    void* emoji_box_=this;
     std::unique_ptr<Gif> gif_controller_;
     std::string status;
     virtual void SetStatus(const char* value){status=value;}
@@ -60,6 +66,7 @@ int main(){
     assert(!d.SetEmotion("neutral") && !draws);
     d.setup=true;
     assert(d.SetEmotion("robot_2") && selected==SquirrelExpression::Neutral && d.shown);
+    assert(scale==461 && overflow_visible);
     const auto neutral_draws=draws;
     assert(d.SetEmotion("neutral") && draws==neutral_draws);
     d.SetStatus(Lang::Strings::LISTENING);
