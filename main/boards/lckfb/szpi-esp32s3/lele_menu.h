@@ -73,6 +73,8 @@ private:
     lv_obj_t* assistant_region_ = nullptr;
     AssistantTap assistant_tap_;
     std::atomic<bool> assistant_tap_pending_{false};
+    std::atomic<bool> screen_wake_pending_{false};
+    bool screen_wake_gesture_ = false;  // LVGL callback only; consume through release.
     Display* display_ = nullptr;
     Backlight* backlight_ = nullptr;
     LeleLcdDisplay* orientation_display_ = nullptr;
@@ -100,6 +102,7 @@ private:
     void Message(const char* text);
     void Close();
     void Poll();
+    void PollScreenIdle();
     void Enter(bool network = false);
     void PollWifiUpload();
     void Return();

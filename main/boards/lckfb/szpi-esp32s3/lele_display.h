@@ -1,11 +1,17 @@
 #pragma once
 #include "sdkconfig.h"
 #if defined(CONFIG_LICHUANG_USB_STORAGE) && defined(CONFIG_USE_DEFAULT_MESSAGE_STYLE)
+#include <esp_lcd_panel_ops.h>
 #include <esp_lvgl_port.h>
+#include <esp_timer.h>
+#include <algorithm>
 #include <cstring>
 #include "assets/lang_config.h"
+#include "backlight.h"
 #include "display/lcd_display.h"
 #include "lele_display_layout.h"
+#include "screen_idle.h"
+#include "settings.h"
 #include "squirrel_images.h"
 
 // Board-local rotation: no change to other SPI displays or alternate UI styles.
@@ -25,6 +31,67 @@ public:
     }
 
     bool IsPortrait() const { return portrait_; }
+
+    void ConfigureScreenIdle(Backlight* backlight) { backlight_ = backlight; }
+    bool IsScreenOff() const { return screen_off_.load(); }
+
+    // All panel/backlight work stays on the application task. Touch callbacks
+    // only queue a request through LeleMenu; audio wake uses the Display API.
+    void PollScreenIdle(bool keep_awake) {
+        if (!IsSetupUICalled() || !backlight_)
+            return;
+        if (wake_requested_ || keep_awake) {
+            SetPowerSaveMode(false);
+            return;
+        }
+        if (screen_idle_.Due(esp_timer_get_time(), false) && !screen_off_)
+            SetPowerSaveMode(true);
+    }
+
+    void SetPowerSaveMode(bool on) override {
+        const auto now = esp_timer_get_time();
+        if (!on) {
+            screen_idle_.Activity(now);
+            wake_requested_ = true;
+        }
+        if (!IsSetupUICalled() || !backlight_)
+            return;
+        if (!on && !screen_off_) {
+            wake_requested_ = false;
+            return;
+        }
+        if (on && (screen_off_ || wake_requested_))
+            return;
+        if (!lvgl_port_lock(1000))
+            return;  // Keep the wake request pending, or retry sleep on the next poll.
+        // Check the input clock under the same lock as panel-off. A press that
+        // arrived just after the menu sampled its queue must prevent sleep.
+        if (on && lv_display_get_inactive_time(display_) < LeleScreenIdle::kTimeoutUs / 1000) {
+            lvgl_port_unlock();
+            return;
+        }
+        const auto result = esp_lcd_panel_disp_on_off(panel_, !on);
+        if (result == ESP_OK) {
+            if (on) {
+                Settings settings("display");
+                const int saved = settings.GetInt("brightness", 75);
+                wake_brightness_ = saved <= 0 ? 10 : std::min(saved, 100);
+                backlight_->SetBrightness(0, false);
+                screen_off_ = true;
+            } else {
+                backlight_->SetBrightness(wake_brightness_, false);
+                screen_off_ = false;
+                wake_requested_ = false;
+                lv_obj_invalidate(lv_display_get_screen_active(display_));
+            }
+            ESP_LOGI("LeleScreen", "Display %s", on ? "off" : "on");
+        } else {
+            ESP_LOGW("LeleScreen", "Display power request failed: %d", result);
+            if (on)
+                screen_idle_.Activity(now);  // Avoid repeating a sleep error every 100ms.
+        }
+        lvgl_port_unlock();
+    }
 
     void SetStatus(const char* status) override {
         if (!status)
@@ -83,6 +150,11 @@ public:
 private:
     bool portrait_ = false;
     std::atomic<SquirrelExpression> activity_{SquirrelExpression::Neutral};
+    Backlight* backlight_ = nullptr;
+    LeleScreenIdle screen_idle_;
+    std::atomic<bool> screen_off_{false};
+    bool wake_requested_ = false;
+    int wake_brightness_ = 75;
 
     bool ShowSquirrel(SquirrelExpression expression) {
         if (!IsSetupUICalled() || !emoji_image_ || !lvgl_port_lock(1000))

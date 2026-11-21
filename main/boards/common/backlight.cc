@@ -48,13 +48,15 @@ void Backlight::SetBrightness(uint8_t brightness, bool permanent) {
         brightness = 100;
     }
 
-    if (brightness_ == brightness) {
-        return;
-    }
-
     if (permanent) {
         Settings settings("display", true);
         settings.SetInt("brightness", brightness);
+    }
+
+    // A wake request can arrive before the first step of a fade to zero.
+    // Compare the requested target, otherwise that request can be discarded.
+    if (target_brightness_ == brightness) {
+        return;
     }
 
     target_brightness_ = brightness;

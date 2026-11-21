@@ -391,6 +391,10 @@ void LeleMenu::Toggle() {
         return;
     // All mutations other than atomic input run on the main loop.
     Application::GetInstance().Schedule([this]() {
+#if defined(CONFIG_USE_DEFAULT_MESSAGE_STYLE)
+        if (orientation_display_)
+            orientation_display_->SetPowerSaveMode(false);
+#endif
         if (IsOpen())
             Close();
         else {
@@ -402,6 +406,12 @@ void LeleMenu::Toggle() {
 }
 
 bool LeleMenu::HandleClick() {
+#if defined(CONFIG_USE_DEFAULT_MESSAGE_STYLE)
+    if (orientation_display_ && orientation_display_->IsScreenOff()) {
+        screen_wake_pending_ = true;
+        return true;
+    }
+#endif
     if (!IsOpen() && !transfer_boot_)
         return false;
     action_ = transfer_boot_ ? Action::Return : Action::Close;
@@ -514,7 +524,21 @@ void LeleMenu::Return() {
     esp_restart();
 }
 
+void LeleMenu::PollScreenIdle() {
+#if defined(CONFIG_USE_DEFAULT_MESSAGE_STYLE)
+    if (!orientation_display_)
+        return;
+    if (screen_wake_pending_.exchange(false))
+        orientation_display_->SetPowerSaveMode(false);
+    const auto state = Application::GetInstance().GetDeviceState();
+    orientation_display_->PollScreenIdle(IsOpen() || transfer_boot_ || preparing_ ||
+                                         restart_to_transfer_ || wifi_transfer_ ||
+                                         state != kDeviceStateIdle);
+#endif
+}
+
 void LeleMenu::Poll() {
+    PollScreenIdle();
     // Board construction precedes Application::Initialize/SetupUI. Installing
     // the region in Start would leave it below the later full-screen widgets.
     // Poll runs on the application task after initialization has completed.
@@ -640,6 +664,21 @@ void LeleMenu::HandleAssistantTouch(lv_event_t* event) {
     if (code != LV_EVENT_PRESSED && code != LV_EVENT_PRESSING && code != LV_EVENT_RELEASED &&
         code != LV_EVENT_PRESS_LOST)
         return;
+#if defined(CONFIG_USE_DEFAULT_MESSAGE_STYLE)
+    if (code == LV_EVENT_PRESSED) {
+        screen_wake_gesture_ = orientation_display_ && orientation_display_->IsScreenOff();
+        screen_wake_pending_ = true;
+    } else if (code == LV_EVENT_PRESSING) {
+        screen_wake_pending_ = true;
+    }
+    if (screen_wake_gesture_) {
+        assistant_tap_.Cancel();
+        assistant_tap_pending_ = false;
+        if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST)
+            screen_wake_gesture_ = false;
+        return;
+    }
+#endif
     auto* input = lv_indev_active();
     if (!input) {
         assistant_tap_.Cancel();

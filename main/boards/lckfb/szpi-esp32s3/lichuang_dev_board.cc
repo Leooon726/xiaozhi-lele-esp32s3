@@ -356,6 +356,7 @@ public:
         GetBacklight()->RestoreBrightness();
         menu_.Configure(display_, GetBacklight());
 #if defined(CONFIG_USE_DEFAULT_MESSAGE_STYLE)
+        rotating_display_->ConfigureScreenIdle(GetBacklight());
         menu_.ConfigureOrientation(rotating_display_);
 #endif
         menu_.RunTransferBootIfRequested();
