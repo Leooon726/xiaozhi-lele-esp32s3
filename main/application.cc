@@ -969,6 +969,10 @@ void Application::HandleStopListeningEvent() {
 }
 
 void Application::HandleWakeWordDetectedEvent() {
+#if defined(CONFIG_LICHUANG_USB_STORAGE) && defined(CONFIG_USE_DEFAULT_MESSAGE_STYLE)
+    // Wake the panel locally, even before checking or contacting the protocol.
+    Board::GetInstance().GetDisplay()->SetPowerSaveMode(false);
+#endif
 #ifdef CONFIG_LICHUANG_TF_MUSIC
     if (!pending_music_.empty()) {
         pending_music_.clear();
@@ -1083,6 +1087,11 @@ void Application::HandleStateChangedEvent() {
     auto display = board.GetDisplay();
     auto led = board.GetLed();
     led->OnStateChanged();
+
+#if defined(CONFIG_LICHUANG_USB_STORAGE) && defined(CONFIG_USE_DEFAULT_MESSAGE_STYLE)
+    if (new_state != kDeviceStateIdle)
+        display->SetPowerSaveMode(false);
+#endif
 
     switch (new_state) {
         case kDeviceStateUnknown:
