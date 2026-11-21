@@ -8,14 +8,15 @@
 
 - 最新本地候选：[1.8 倍松鼠 test-54b53009b4ad-01](testing/test-54b53009b4ad-01.md)，
   源码 54b53009b4ad；完整 debug 构建、五文件校验及 2 项相关回归通过。
-  未发布、未刷入，当前设备仍为 d0b44f2d3f6c；待当次烧录授权及放大构图验收。
+  未发布 Release；Mac 已按本次授权刷入 54b53009b4ad，启动 idle/346 首
+  缓存和扫描/PERFORMANCE(NONE) 正常，用户报告中央方形裁剪，E-01 失败，E-02 未测；修复中。
 
 - 首选待测：[松鼠表情 test-d0b44f2d3f6c-01](testing/test-d0b44f2d3f6c-01.md)，源码 d0b44f2d3f6ce065c8cc5fde36bac5ab5ecabd82。
   已发布 Pre-release 并下载回读核对；本版不含自动息屏。227 项主机（5 skip）、
   20 项条件语法检查和固定源码构建通过。Mac 于 2026-11-21 完整备份/校验后
   刷入 d0b44f2d3f6c，启动 idle / 346 首缓存 / PERFORMANCE(NONE) 通过；
   用户确认 Q-01/02 基本显示与对话正常；2 / 0 / 2，Q-03/04 待测。
-  后续按用户要求开发 1.8 倍显示尺寸，尚未刷入，不计作当前包通过。
+  后续 1.8 倍显示尺寸已刷入上述 54b53009b4ad；不计作本包或新版视觉通过。
 
 
 - 上一公开 Pre-release：[test-2920ecbd72d3-01](testing/test-2920ecbd72d3-01.md)，源码 2920ecbd72d3223e4b272ac91a44c028a9f705c6。
