@@ -223,13 +223,32 @@ std::atomic<bool> debug_verify_cancel{false};
 struct ReadCheckJob {
     std::string path;
     unsigned index;
+    bool internal = false;
 };
+
+bool CheckReadBufferMemory(uint8_t* buffer) {
+    // Fixed public test vector, independent of SD contents. Not a full RAM test.
+    constexpr size_t size = 4096;
+    for (size_t i = 0; i < size; ++i)
+        buffer[i] = static_cast<uint8_t>(i);
+    constexpr std::array<uint8_t, 32> expected = {0xc8, 0xf5, 0xd0, 0x34, 0x1d, 0x54, 0xd9, 0x51,
+                                                  0xa7, 0x1b, 0x13, 0x6e, 0x6e, 0x2a, 0xfc, 0xb1,
+                                                  0x4d, 0x11, 0xed, 0x84, 0x89, 0xa7, 0xae, 0x12,
+                                                  0x6a, 0x8f, 0xee, 0x0d, 0xf6, 0xec, 0xf1, 0x93};
+    std::array<uint8_t, 32> digest{};
+    size_t length = 0;
+    return psa_hash_compute(PSA_ALG_SHA_256, buffer, size, digest.data(), digest.size(), &length) ==
+               PSA_SUCCESS &&
+           length == digest.size() && digest == expected;
+}
 
 void RunReadCheck(const ReadCheckJob& job) {
     constexpr size_t max_bytes = 16 * 1024 * 1024;
     constexpr size_t buffer_size = 4096;
     std::unique_ptr<uint8_t, decltype(&heap_caps_free)> buffer(
-        static_cast<uint8_t*>(heap_caps_malloc(buffer_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)),
+        static_cast<uint8_t*>(heap_caps_malloc(
+            buffer_size,
+            (job.internal ? MALLOC_CAP_INTERNAL : MALLOC_CAP_SPIRAM) | MALLOC_CAP_8BIT)),
         heap_caps_free);
     if (!buffer || psa_crypto_init() != PSA_SUCCESS) {
         ESP_LOGE("TfMusicVerify", "Unable to initialize read check");
@@ -245,13 +264,19 @@ void RunReadCheck(const ReadCheckJob& job) {
     std::array<uint8_t, 32> first_digest{};
     size_t first_bytes = 0;
     bool all_equal = true;
-    ESP_LOGI("TfMusicVerify", "Start index=%u passes=3 max_bytes=%u", job.index,
-             unsigned(max_bytes));
+    ESP_LOGI("TfMusicVerify", "Start index=%u passes=3 max_bytes=%u buffer=%s", job.index,
+             unsigned(max_bytes), job.internal ? "internal" : "PSRAM");
     for (unsigned pass = 1; pass <= 3; ++pass) {
         if (cancelled()) {
             ESP_LOGW("TfMusicVerify", "Cancelled before pass=%u", pass);
             return;
         }
+        if (!CheckReadBufferMemory(buffer.get())) {
+            ESP_LOGE("TfMusicVerify", "Known-pattern SHA check failed before pass=%u buffer=%s",
+                     pass, job.internal ? "internal" : "PSRAM");
+            return;
+        }
+        ESP_LOGI("TfMusicVerify", "Known-pattern SHA check passed before pass=%u", pass);
         const int64_t started = esp_timer_get_time();
         std::unique_ptr<FILE, decltype(&std::fclose)> file(std::fopen(job.path.c_str(), "rb"),
                                                            std::fclose);
@@ -309,11 +334,16 @@ void RunReadCheck(const ReadCheckJob& job) {
                  pass, unsigned(result.bytes), hex, equal,
                  static_cast<unsigned long>((esp_timer_get_time() - started) / 1000));
     }
-    ESP_LOGI("TfMusicVerify", "Done index=%u passes=3 all_equal=%d", job.index, all_equal);
+    if (!CheckReadBufferMemory(buffer.get())) {
+        ESP_LOGE("TfMusicVerify", "Known-pattern SHA check failed after file reads");
+        return;
+    }
+    ESP_LOGI("TfMusicVerify", "Done index=%u passes=3 all_equal=%d buffer=%s memory_checks=4",
+             job.index, all_equal, job.internal ? "internal" : "PSRAM");
 }
 
-void StartReadCheck(unsigned index) {
-    Application::GetInstance().Schedule([index]() {
+void StartReadCheck(unsigned index, bool internal = false) {
+    Application::GetInstance().Schedule([index, internal]() {
         auto& app = Application::GetInstance();
         std::unique_ptr<ReadCheckJob> job;
         {
@@ -325,7 +355,8 @@ void StartReadCheck(unsigned index) {
                          "Busy or index not ready; retry when idle and scanning=0");
                 return;
             }
-            job.reset(new (std::nothrow) ReadCheckJob{std::string(library[index].view()), index});
+            job.reset(new (std::nothrow)
+                          ReadCheckJob{std::string(library[index].view()), index, internal});
             if (!job) {
                 ESP_LOGE("TfMusicVerify", "Unable to allocate job");
                 return;
@@ -374,8 +405,9 @@ void RunDebugCommand(TfMusic::DebugCommand command) {
         ESP_LOGI("TfMusicDebug", "Stop requested");
         return;
     }
-    if (command.action == TfMusic::DebugAction::Verify) {
-        StartReadCheck(command.index);
+    if (command.action == TfMusic::DebugAction::Verify ||
+        command.action == TfMusic::DebugAction::VerifyInternal) {
+        StartReadCheck(command.index, command.action == TfMusic::DebugAction::VerifyInternal);
         return;
     }
     std::string path;

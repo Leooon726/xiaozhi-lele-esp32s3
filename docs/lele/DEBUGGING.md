@@ -92,3 +92,18 @@ python scripts/lele/music_debug.py verify 1 --seconds 120
 三遍一致只说明该观察窗口的板内读取一致，不证明原文件正确；三遍不一致则继续
 查板内 SD/内存路径。再与 USB 副本摘要对照，隔离 MSC/Mac 路径。
 对应现有失败和 USB 读取证据见 [SD_PLAYBACK.md](SD_PLAYBACK.md)。
+
+### 内部缓冲对照与固定数据自检（下一候选，尚未刷入）
+
+增加 `music-test verify-internal <编号>`，其余参数与 verify 一样，只将 4 KiB
+输入缓冲放内部 SRAM；PSRAM worker 栈和所有门禁保持。每一遍读文件前及全部
+读取后，用同一缓冲写入公开固定序列 `byte[i]=i mod 256`（4096 bytes）并比较
+已知 SHA-256，校验失败立即中止。这个固定缓冲测试不是整片 RAM 或密码库的
+全面验证，不能由通过就排除所有 RAM/DMA/缓存问题。不改 SD 频率或歌曲。
+
+```bash
+python scripts/lele/music_debug.py verify-internal 1 --seconds 120
+```
+
+预期对照：记录两种缓冲下三遍文件摘要及 4 次固定数据自检，不能把派生摘要
+不一致直接归咎文件本身；1c5ba9287a39 仅支持原 verify，不支持此新命令。

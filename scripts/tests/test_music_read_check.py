@@ -72,9 +72,37 @@ int main() {
 }
 ''')
 
+    def test_known_pattern_checks_crypto_status_length_and_digest(self):
+        import hashlib
+        source = (BOARD / 'music_tools.cc').read_text()
+        start = source.index('bool CheckReadBufferMemory(uint8_t* buffer) {')
+        end = source.index('\nvoid RunReadCheck(', start)
+        expected = ','.join(str(x) for x in hashlib.sha256(bytes(range(256)) * 16).digest())
+        code = r'''
+#include <array>
+#include <cassert>
+#include <cstdint>
+#include <cstring>
+constexpr int PSA_ALG_SHA_256=1, PSA_SUCCESS=0;
+int mode=0;
+int psa_hash_compute(int algorithm, const uint8_t* data,size_t size,uint8_t* out,size_t cap,size_t* length){
+ assert(algorithm==1 && size==4096 && cap==32);
+ for(size_t i=0;i<size;++i)assert(data[i]==uint8_t(i));
+ const uint8_t reference[]={REFERENCE};
+ memcpy(out,reference,32);*length=mode==2 ? 31 : 32;
+ if(mode==3)out[0]^=1;
+ return mode==1 ? -1 : 0;
+}
+''' .replace('REFERENCE', expected) + source[start:end] + r'''
+int main(){uint8_t buffer[4096];
+ for(mode=0;mode<4;++mode)assert(CheckReadBufferMemory(buffer)==(mode==0));
+}
+'''
+        compile_run(code)
+
     def test_worker_reserves_storage_and_releases_after_close(self):
         source = (BOARD / 'music_tools.cc').read_text()
-        start = source.index('void StartReadCheck(unsigned index) {')
+        start = source.index('void StartReadCheck(unsigned index, bool internal = false) {')
         end = source.index('\nvoid RunDebugCommand(', start)
         compile_run(r'''
 #include <cassert>
@@ -93,7 +121,7 @@ bool storage_pending=false,debug_verify_active=false,scanning=false,ready=true;
 std::atomic<bool> debug_verify_cancel=false;
 struct Path { std::string value="/sdcard/song.mp3";const std::string& view(){return value;} };
 std::vector<Path> library(1);
-struct ReadCheckJob {std::string path;unsigned index;};
+struct ReadCheckJob {std::string path;unsigned index;bool internal=false;};
 struct Audio {bool idle=true;bool IsPlaybackIdle(){return idle;}};
 struct Application {
     std::deque<std::function<void()>> pending;Audio audio;int state=3;bool blocked=false;
@@ -131,7 +159,7 @@ int main(){
  StartReadCheck(0);app.Drain();assert(created==2); // Only one active worker.
  worker(argument);assert(checked==1 && deleted==1 && debug_verify_active && app.blocked);
  app.Drain();assert(!debug_verify_active && !app.blocked); // No ownership release before read scope exits.
- StartReadCheck(0);app.Drain();storage_pending=true;
+ StartReadCheck(0,true);app.Drain();assert(static_cast<ReadCheckJob*>(argument)->internal);storage_pending=true;
  worker(argument);app.Drain();assert(!debug_verify_active && app.blocked); // Transfer keeps its gate.
 }
 ''')

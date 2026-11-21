@@ -5,13 +5,13 @@ ROOT = Path(__file__).resolve().parents[2]
 import serial
 from serial.tools import list_ports
 os.umask(0o077)
-a=argparse.ArgumentParser();a.add_argument('action',choices=['play','stop','status','verify']);a.add_argument('index',nargs='?',type=int,default=0);a.add_argument('--seconds',type=int,default=20);a.add_argument('--port');args=a.parse_args()
+a=argparse.ArgumentParser();a.add_argument('action',choices=['play','stop','status','verify','verify-internal']);a.add_argument('index',nargs='?',type=int,default=0);a.add_argument('--seconds',type=int,default=20);a.add_argument('--port');args=a.parse_args()
 assert 0<=args.index<1024 and 1<=args.seconds<=120
 ports=[p.device for p in list_ports.comports() if p.vid==0x303a and p.pid==0x1001];ports=[args.port] if args.port else ports
 assert len(ports)==1, 'Use --port when zero or multiple ESP32 USB ports are present: '+str(ports)
 p=serial.Serial(port=None,baudrate=115200,timeout=.2,write_timeout=2);p.dtr=False;p.rts=False;p.port=ports[0]
 log=(ROOT / '.local/logs')/('music-debug-control-'+time.strftime('%Y%m%d-%H%M%S')+'.log');log.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
-command='music-test '+args.action+(' '+str(args.index) if args.action in ('play','verify') else '')+'\n'
+command='music-test '+args.action+(' '+str(args.index) if args.action in ('play','verify','verify-internal') else '')+'\n'
 all_data=bytearray();sent=False;ready=False;opened_at=time.monotonic();deadline=opened_at+40;next_probe=opened_at+8
 try:
  p.open()
@@ -28,7 +28,7 @@ try:
     all_data.extend(data);f.write(data);f.flush()
     if b'-> idle' in all_data or b'TfMusicDebug: ready=' in all_data:ready=True
    if not sent and time.monotonic()>=next_probe:
-    if b'TfMusicDebug: ready=1' in all_data and (args.action!='verify' or re.search(rb'TfMusicDebug: ready=1[^\r\n]*scanning=0', all_data)):
+    if b'TfMusicDebug: ready=1' in all_data and (not args.action.startswith('verify') or re.search(rb'TfMusicDebug: ready=1[^\r\n]*scanning=0', all_data)):
      p.write(command.encode());sent=True;deadline=time.monotonic()+args.seconds
      print('Sent: '+command.strip(),flush=True)
     else:
@@ -43,5 +43,5 @@ for line in all_data.decode('utf-8','replace').splitlines():
   print(line)
 if not sent:raise SystemExit('Debug command not sent: diagnostic endpoint/index not ready.')
 
-if args.action=='verify' and b'TfMusicVerify: Done index=' not in all_data:
+if args.action.startswith('verify') and b'TfMusicVerify: Done index=' not in all_data:
  raise SystemExit('Read check did not complete: inspect the private log for busy, cancellation or I/O/hash errors.')
