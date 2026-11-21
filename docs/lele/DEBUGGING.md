@@ -107,3 +107,9 @@ python scripts/lele/music_debug.py verify-internal 1 --seconds 120
 
 预期对照：记录两种缓冲下三遍文件摘要及 4 次固定数据自检，不能把派生摘要
 不一致直接归咎文件本身；1c5ba9287a39 仅支持原 verify，不支持此新命令。
+
+### SD 时钟对照候选（尚未刷入）
+
+板级 music_sd_clock.h 统一助手和独立 MSC 为 5000 kHz，替代此前默认 20000 kHz。
+初始化日志打印 requested/actual。校验入口、内存模式和固定数据自检不变；
+不能由编译成功推断卡的读回数据稳定，实际协议时钟及摘要/播放结果需实机记录。

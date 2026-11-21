@@ -1,4 +1,5 @@
 #include "usb_transfer.h"
+#include "music_sd_clock.h"
 #ifdef CONFIG_LICHUANG_USB_STORAGE
 #include <driver/sdmmc_host.h>
 #include <esp_log.h>
@@ -96,7 +97,7 @@ esp_err_t Start() {
     setvbuf(stdout, nullptr, _IONBF, 0);
     setvbuf(stderr, nullptr, _IONBF, 0);
     sdmmc_host_t host = SDMMC_HOST_DEFAULT();
-    host.max_freq_khz = SDMMC_FREQ_DEFAULT;
+    host.max_freq_khz = TfMusic::kSdClockKhz;
     sdmmc_slot_config_t slot = SDMMC_SLOT_CONFIG_DEFAULT();
     slot.width = 1;
     slot.clk = GPIO_NUM_47;
@@ -113,6 +114,8 @@ esp_err_t Start() {
     if (result != ESP_OK)
         return result;
 
+    ESP_LOGI(kTag, "SD clock: requested=%d actual=%d kHz", TfMusic::kSdClockKhz,
+             card.real_freq_khz);
     tinyusb_msc_driver_config_t driver = {};
     // 2.4.0 routes the SCSI eject through the same automatic APP remount path.
     // Setting auto_mount_off would disable eject notifications too. No assistant

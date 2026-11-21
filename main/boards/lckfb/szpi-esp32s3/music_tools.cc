@@ -20,6 +20,7 @@
 #include "mcp_server.h"
 #include "music_index_cache.h"
 #include "music_library.h"
+#include "music_sd_clock.h"
 #include "music_storage.h"
 #ifdef CONFIG_LICHUANG_USB_STORAGE
 #include <nvs.h>
@@ -86,7 +87,7 @@ bool MountCard() {
     if (card)
         return true;
     sdmmc_host_t host = SDMMC_HOST_DEFAULT();
-    host.max_freq_khz = SDMMC_FREQ_DEFAULT;
+    host.max_freq_khz = TfMusic::kSdClockKhz;
     sdmmc_slot_config_t slot = SDMMC_SLOT_CONFIG_DEFAULT();
     // Lichuang Shizhanpai S3: SDMMC 1-bit, independent of LCD SPI and I2S.
     slot.clk = GPIO_NUM_47;
@@ -98,7 +99,11 @@ bool MountCard() {
     mount.format_if_mount_failed = false;  // Never format a user's music card.
     mount.max_files = 8;
     mount.allocation_unit_size = 16 * 1024;
-    return esp_vfs_fat_sdmmc_mount("/sdcard", &host, &slot, &mount, &card) == ESP_OK;
+    const auto result = esp_vfs_fat_sdmmc_mount("/sdcard", &host, &slot, &mount, &card);
+    if (result == ESP_OK)
+        ESP_LOGI(kTag, "SD clock: requested=%d actual=%d kHz", TfMusic::kSdClockKhz,
+                 card->real_freq_khz);
+    return result == ESP_OK;
 }
 
 // All filesystem I/O stays in this worker. MCP searches keep using the old index.

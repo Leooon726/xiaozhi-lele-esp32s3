@@ -33,7 +33,7 @@ inline int nvs_commit(unsigned) {
     return commit_error;
 }
 inline void nvs_close(unsigned) {}
-struct sdmmc_card_t {};
+struct sdmmc_card_t {int real_freq_khz=0;};
 struct sdmmc_host_t {int max_freq_khz=0,slot=1;};
 struct sdmmc_slot_config_t {int width=0,clk=0,cmd=0,d0=0,flags=0;};
 #define SDMMC_HOST_DEFAULT() sdmmc_host_t{}
@@ -45,7 +45,9 @@ inline int sdmmc_host_init() {return ESP_OK;}
 inline int sdmmc_host_init_slot(int,sdmmc_slot_config_t* c) {
     assert(c->width==1 && c->clk==47 && c->cmd==48 && c->d0==21);return ESP_OK;
 }
-inline int sdmmc_card_init(sdmmc_host_t*,sdmmc_card_t*) {return sd_error;}
+inline int sdmmc_card_init(sdmmc_host_t* h,sdmmc_card_t* c) {
+    assert(h->max_freq_khz==5000);c->real_freq_khz=h->max_freq_khz;return sd_error;
+}
 inline int sdmmc_host_deinit() {++host_closed;return ESP_OK;}
 enum tinyusb_msc_mount_point_t {TINYUSB_MSC_STORAGE_MOUNT_USB,TINYUSB_MSC_STORAGE_MOUNT_APP};
 enum {TINYUSB_MSC_EVENT_MOUNT_START,TINYUSB_MSC_EVENT_MOUNT_COMPLETE,
