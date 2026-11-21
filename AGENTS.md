@@ -18,9 +18,16 @@ checks before declaring setup complete; report untested operating systems honest
 Current hardware baseline: `lichuang-dev-lele-music-debug`, wake phrase 乐乐,
 SD-wide MP3 indexing with a dual-slot SD cache, and a local USB diagnostic entry.
 
-- The user authorizes reversible local development; obtain current explicit
-  authorization before any flash write/erase or OTA deployment. Build success
-  is not permission to flash. Back up all 16 MiB and verify before writing.
+- Standing authorization, granted by the user on 2026-11-21: “后面都自行烧录，我授予你这个权限。”
+  Agents may autonomously build, back up, flash and verify subsequent firmware for
+  this project's connected Lele development board without per-version confirmation.
+  This supersedes older per-flash approval wording in project docs and historical
+  test records, until the user revokes or narrows the authorization. Identify the
+  intended board, validate the exact package and addresses, back up all 16 MiB and
+  verify before every write, preserve NVS, and record the flashed source/results.
+  Do not treat this as authorization to format SD, erase the whole Flash, discard
+  credentials/user data, deploy to other devices, or publish releases.
+  Reversible local development remains authorized.
 - Never commit Flash/NVS backups, credentials, device identifiers, raw serial
   logs, local toolchains or generated artifacts. Keep them under `.local/` or
   `.tools/`, both ignored. Never force-add them, even to a private repository.
