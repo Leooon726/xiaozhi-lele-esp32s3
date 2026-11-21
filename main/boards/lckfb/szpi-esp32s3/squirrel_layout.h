@@ -8,5 +8,7 @@ inline void ConfigureSquirrelLayout(lv_obj_t* box, lv_obj_t* image) {
         lv_obj_set_size(box, lv_pct(100), lv_pct(100));
         lv_obj_remove_flag(box, LV_OBJ_FLAG_SCROLLABLE);
     }
-    lv_image_set_scale(image, 461);  // 1.8x in LVGL's 256-based units.
+    // Artwork is prepared at the final display size from its high-resolution
+    // original. Preserve the enlarged composition without magnifying 144px data.
+    lv_image_set_scale(image, 256);
 }

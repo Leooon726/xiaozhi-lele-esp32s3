@@ -5,6 +5,7 @@
 #include "assistant_touch_region.h"
 #include "lele_display_layout.h"
 #include "song_list_layout.h"
+#include "squirrel_images.h"
 #include "squirrel_layout.h"
 #include "src/draw/lv_image_decoder_private.h"
 #include "src/draw/snapshot/lv_snapshot.h"
@@ -25,12 +26,13 @@ static void CheckSquirrelImages() {
         lv_image_dsc_t image{};
         image.header.magic = LV_IMAGE_HEADER_MAGIC;
         image.header.cf = LV_COLOR_FORMAT_RAW_ALPHA;
-        image.header.w = image.header.h = 144;
+        image.header.w = image.header.h = kSquirrelImageSize;
         image.data_size = data.size();
         image.data = data.data();
         lv_image_decoder_dsc_t decoder{};
         assert(lv_image_decoder_open(&decoder, &image, nullptr) == LV_RESULT_OK);
-        assert(decoder.header.w == 144 && decoder.header.h == 144 && decoder.decoded);
+        assert(decoder.header.w == kSquirrelImageSize && decoder.header.h == kSquirrelImageSize &&
+               decoder.decoded);
         lv_image_decoder_close(&decoder);
         // The backing vector is temporary; do not leave it in the image cache.
         lv_image_cache_drop(&image);
@@ -48,12 +50,13 @@ static void CheckSquirrelClipping(int width, int height, bool legacy) {
     lv_obj_remove_style_all(box);
     lv_obj_set_size(box, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_center(box);
-    std::vector<uint8_t> pixels(144 * 144 * 3, 255);
+    const int side = legacy ? 144 : kSquirrelImageSize;
+    std::vector<uint8_t> pixels(side * side * 3, 255);
     lv_image_dsc_t source{};
     source.header.magic = LV_IMAGE_HEADER_MAGIC;
     source.header.cf = LV_COLOR_FORMAT_RGB888;
-    source.header.w = source.header.h = 144;
-    source.header.stride = 144 * 3;
+    source.header.w = source.header.h = side;
+    source.header.stride = side * 3;
     source.data = pixels.data();
     source.data_size = pixels.size();
     auto* image = lv_image_create(box);
