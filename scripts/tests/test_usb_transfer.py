@@ -176,7 +176,7 @@ class UsbTransferTests(unittest.TestCase):
 struct sdmmc_card_t {};
 std::mutex card_mutex;
 sdmmc_card_t* card = new sdmmc_card_t;
-bool storage_pending=false, scanning=false, ready=true;
+bool storage_pending=false, scanning=false, ready=true, debug_verify_active=false;
 constexpr auto kMusicRoot="/sdcard";
 constexpr int ESP_OK=0;
 int result=-1,calls=0;
@@ -189,7 +189,9 @@ int main() {
     assert(!UnmountLichuangMusicCard() && card && ready && calls==0);
     storage_pending=true;scanning=true;
     assert(!UnmountLichuangMusicCard() && card && calls==0);
-    scanning=false;
+    scanning=false;debug_verify_active=true;
+    assert(!UnmountLichuangMusicCard() && card && calls==0);
+    debug_verify_active=false;
     assert(!UnmountLichuangMusicCard() && !card && !ready && calls==1);
     assert(storage_pending); // Failure does not reopen the I/O gate.
     card=new sdmmc_card_t;ready=true;result=ESP_OK;

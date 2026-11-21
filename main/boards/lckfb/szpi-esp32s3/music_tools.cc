@@ -8,6 +8,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cctype>
 #include <mutex>
@@ -25,10 +26,16 @@
 #endif
 #ifdef CONFIG_LICHUANG_TF_MUSIC_DEBUG
 #include <fcntl.h>
+#include <psa/crypto.h>
 #include <unistd.h>
+#include <cerrno>
+#include <cstdio>
+#include <memory>
+#include <new>
 #include "driver/usb_serial_jtag.h"
 #include "driver/usb_serial_jtag_vfs.h"
 #include "music_debug_command.h"
+#include "music_read_check.h"
 #endif
 
 namespace {
@@ -60,6 +67,7 @@ TfMusic::MusicPaths library;
 uint32_t library_revision = 0;  // Access only under card_mutex, including UI snapshots.
 bool scanning = false;
 bool storage_pending = false;
+bool debug_verify_active = false;  // Protected by card_mutex; false in non-debug builds.
 bool ready = false;
 bool library_truncated = false;
 bool cache_saved = false;
@@ -186,7 +194,7 @@ void RunScan(bool load_cache) {
 
 // Caller holds card_mutex. Explicit refresh promotes an already waiting scan.
 bool StartScanLocked(bool manual = false, bool load_cache = false) {
-    if (storage_pending)
+    if (storage_pending || debug_verify_active)
         return false;
     if (manual)
         manual_refresh = true;
@@ -210,28 +218,182 @@ bool StartScanLocked(bool manual = false, bool load_cache = false) {
     return true;
 }
 #ifdef CONFIG_LICHUANG_TF_MUSIC_DEBUG
+std::atomic<bool> debug_verify_cancel{false};
+
+struct ReadCheckJob {
+    std::string path;
+    unsigned index;
+};
+
+void RunReadCheck(const ReadCheckJob& job) {
+    constexpr size_t max_bytes = 16 * 1024 * 1024;
+    constexpr size_t buffer_size = 4096;
+    std::unique_ptr<uint8_t, decltype(&heap_caps_free)> buffer(
+        static_cast<uint8_t*>(heap_caps_malloc(buffer_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)),
+        heap_caps_free);
+    if (!buffer || psa_crypto_init() != PSA_SUCCESS) {
+        ESP_LOGE("TfMusicVerify", "Unable to initialize read check");
+        return;
+    }
+    const int64_t deadline = esp_timer_get_time() + 90000000;
+    auto cancelled = [&]() {
+        std::lock_guard<std::mutex> lock(card_mutex);
+        return debug_verify_cancel.load() || storage_pending ||
+               Application::GetInstance().GetDeviceState() != kDeviceStateIdle ||
+               esp_timer_get_time() >= deadline;
+    };
+    std::array<uint8_t, 32> first_digest{};
+    size_t first_bytes = 0;
+    bool all_equal = true;
+    ESP_LOGI("TfMusicVerify", "Start index=%u passes=3 max_bytes=%u", job.index,
+             unsigned(max_bytes));
+    for (unsigned pass = 1; pass <= 3; ++pass) {
+        if (cancelled()) {
+            ESP_LOGW("TfMusicVerify", "Cancelled before pass=%u", pass);
+            return;
+        }
+        const int64_t started = esp_timer_get_time();
+        std::unique_ptr<FILE, decltype(&std::fclose)> file(std::fopen(job.path.c_str(), "rb"),
+                                                           std::fclose);
+        if (!file) {
+            ESP_LOGE("TfMusicVerify", "Open failed pass=%u errno=%d", pass, errno);
+            return;
+        }
+        // Reopen every pass and avoid stdio read-ahead. Only SD is read.
+        std::setvbuf(file.get(), nullptr, _IONBF, 0);
+        psa_hash_operation_t hash = PSA_HASH_OPERATION_INIT;
+        if (psa_hash_setup(&hash, PSA_ALG_SHA_256) != PSA_SUCCESS) {
+            psa_hash_abort(&hash);
+            ESP_LOGE("TfMusicVerify", "SHA setup failed pass=%u", pass);
+            return;
+        }
+        unsigned chunks = 0;
+        const auto result = TfMusic::CheckReadStream(
+            [&](uint8_t* data, size_t size) {
+                if (++chunks % 16 == 0)
+                    vTaskDelay(1);
+                const size_t count = std::fread(data, 1, size, file.get());
+                return std::ferror(file.get()) ? -1 : static_cast<int>(count);
+            },
+            [&](const uint8_t* data, size_t size) {
+                return psa_hash_update(&hash, data, size) == PSA_SUCCESS;
+            },
+            cancelled, buffer.get(), buffer_size, max_bytes);
+        std::array<uint8_t, 32> digest{};
+        size_t length = 0;
+        const bool complete =
+            result.status == TfMusic::ReadCheckStatus::Complete &&
+            psa_hash_finish(&hash, digest.data(), digest.size(), &length) == PSA_SUCCESS &&
+            length == digest.size();
+        psa_hash_abort(&hash);
+        const int close_error = std::fclose(file.release());
+        if (!complete || close_error != 0) {
+            ESP_LOGE("TfMusicVerify", "Incomplete pass=%u status=%d bytes=%u close=%d", pass,
+                     int(result.status), unsigned(result.bytes), close_error);
+            return;
+        }
+        if (pass == 1) {
+            first_digest = digest;
+            first_bytes = result.bytes;
+        }
+        const bool equal = digest == first_digest && result.bytes == first_bytes;
+        all_equal = all_equal && equal;
+        char hex[65];
+        constexpr char digits[] = "0123456789abcdef";
+        for (size_t i = 0; i < digest.size(); ++i) {
+            hex[2 * i] = digits[digest[i] >> 4];
+            hex[2 * i + 1] = digits[digest[i] & 15];
+        }
+        hex[64] = 0;
+        ESP_LOGI("TfMusicVerify", "pass=%u bytes=%u sha256=%s matches_first=%d elapsed_ms=%lu",
+                 pass, unsigned(result.bytes), hex, equal,
+                 static_cast<unsigned long>((esp_timer_get_time() - started) / 1000));
+    }
+    ESP_LOGI("TfMusicVerify", "Done index=%u passes=3 all_equal=%d", job.index, all_equal);
+}
+
+void StartReadCheck(unsigned index) {
+    Application::GetInstance().Schedule([index]() {
+        auto& app = Application::GetInstance();
+        std::unique_ptr<ReadCheckJob> job;
+        {
+            std::lock_guard<std::mutex> lock(card_mutex);
+            if (storage_pending || debug_verify_active || scanning || !ready ||
+                index >= library.size() || app.GetDeviceState() != kDeviceStateIdle ||
+                !app.GetAudioService().IsPlaybackIdle()) {
+                ESP_LOGW("TfMusicVerify",
+                         "Busy or index not ready; retry when idle and scanning=0");
+                return;
+            }
+            job.reset(new (std::nothrow) ReadCheckJob{std::string(library[index].view()), index});
+            if (!job) {
+                ESP_LOGE("TfMusicVerify", "Unable to allocate job");
+                return;
+            }
+            debug_verify_active = true;
+            debug_verify_cancel = false;
+        }
+        app.SetMusicStorageBlocked(true);
+        auto* context = job.release();
+        const auto created = xTaskCreateWithCaps(
+            [](void* arg) {
+                {
+                    std::unique_ptr<ReadCheckJob> owned(static_cast<ReadCheckJob*>(arg));
+                    RunReadCheck(*owned);
+                }  // File, hash, buffer and path are released before ownership is cleared.
+                Application::GetInstance().Schedule([]() {
+                    bool transfer;
+                    {
+                        std::lock_guard<std::mutex> lock(card_mutex);
+                        debug_verify_active = false;
+                        transfer = storage_pending;
+                    }
+                    if (!transfer)
+                        Application::GetInstance().SetMusicStorageBlocked(false);
+                });
+                vTaskDeleteWithCaps(nullptr);
+            },
+            "tf_verify", 6144, context, 1, nullptr, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (created != pdPASS) {
+            delete context;
+            {
+                std::lock_guard<std::mutex> lock(card_mutex);
+                debug_verify_active = false;
+            }
+            app.SetMusicStorageBlocked(false);
+            ESP_LOGE("TfMusicVerify", "Unable to create worker");
+        }
+    });
+}
+
 void RunDebugCommand(TfMusic::DebugCommand command) {
     auto& app = Application::GetInstance();
     if (command.action == TfMusic::DebugAction::Stop) {
+        debug_verify_cancel = true;
         app.RequestMusicStop();
         ESP_LOGI("TfMusicDebug", "Stop requested");
+        return;
+    }
+    if (command.action == TfMusic::DebugAction::Verify) {
+        StartReadCheck(command.index);
         return;
     }
     std::string path;
     {
         std::lock_guard<std::mutex> lock(card_mutex);
         if (command.action == TfMusic::DebugAction::Status) {
-            ESP_LOGI("TfMusicDebug", "ready=%d tracks=%u scanning=%d playback=%d state=%d", ready,
+            ESP_LOGI("TfMusicDebug",
+                     "ready=%d tracks=%u scanning=%d playback=%d state=%d verifying=%d", ready,
                      unsigned(library.size()), scanning, app.GetMusicStatus(),
-                     int(app.GetDeviceState()));
+                     int(app.GetDeviceState()), debug_verify_active);
             return;
         }
         if (command.action != TfMusic::DebugAction::Play) {
-            ESP_LOGW("TfMusicDebug", "Use: music-test play 0..%u | stop | status",
+            ESP_LOGW("TfMusicDebug", "Use: music-test play/verify 0..%u | stop | status",
                      unsigned(TfMusic::kMaxTracks - 1));
             return;
         }
-        if (storage_pending || !ready || command.index >= library.size()) {
+        if (storage_pending || debug_verify_active || !ready || command.index >= library.size()) {
             ESP_LOGW("TfMusicDebug", "Index not ready or track out of range");
             return;
         }
@@ -277,7 +439,7 @@ void DebugSerialTask(void*) {
         vTaskDelete(nullptr);
         return;
     }
-    ESP_LOGI("TfMusicDebug", "USB ready: music-test play 0..%u | stop | status",
+    ESP_LOGI("TfMusicDebug", "USB ready: music-test play/verify 0..%u | stop | status",
              unsigned(TfMusic::kMaxTracks - 1));
     char line[64];
     size_t used = 0;
@@ -315,7 +477,7 @@ TfMusic::BrowserPage GetLichuangMusicPage(size_t offset) {
     page.ready = ready;
     page.scanning = scanning;
     page.truncated = library_truncated;
-    page.blocked = storage_pending;
+    page.blocked = storage_pending || debug_verify_active;
     page.error = index_error;
     return page;
 }
@@ -323,8 +485,8 @@ TfMusic::BrowserPage GetLichuangMusicPage(size_t offset) {
 bool RequestLichuangMusicPath(const std::string& path) {
     {
         std::lock_guard<std::mutex> lock(card_mutex);
-        if (storage_pending || !ready || !TfMusic::ValidPath(path) || !SdAudio::Playable(path) ||
-            !TfMusic::HasBrowserPath(library, path))
+        if (storage_pending || debug_verify_active || !ready || !TfMusic::ValidPath(path) ||
+            !SdAudio::Playable(path) || !TfMusic::HasBrowserPath(library, path))
             return false;
     }
     Application::GetInstance().RequestMusic(path);
@@ -354,12 +516,12 @@ void CancelLichuangStorageTransfer() {
 
 bool IsLichuangStorageQuiet() {
     std::lock_guard<std::mutex> lock(card_mutex);
-    return storage_pending && !scanning;
+    return storage_pending && !scanning && !debug_verify_active;
 }
 
 bool IsLichuangStorageReadyForUpload() {
     std::lock_guard<std::mutex> lock(card_mutex);
-    return storage_pending && !scanning && card != nullptr;
+    return storage_pending && !scanning && !debug_verify_active && card != nullptr;
 }
 
 #ifdef CONFIG_LICHUANG_USB_STORAGE
@@ -368,7 +530,7 @@ bool MarkLichuangStorageDirty() { return WriteIndexDirty(true); }
 
 bool FinishLichuangStorageUpload() {
     std::lock_guard<std::mutex> lock(card_mutex);
-    if (!storage_pending || scanning)
+    if (!storage_pending || scanning || debug_verify_active)
         return false;
     // Rename/delete can invalidate existing paths. Do not replay a stale RAM
     // index while the new scan (or a failed task allocation) is outstanding.
@@ -380,7 +542,7 @@ bool FinishLichuangStorageUpload() {
 
 bool UnmountLichuangMusicCard() {
     std::lock_guard<std::mutex> lock(card_mutex);
-    if (!storage_pending || scanning)
+    if (!storage_pending || scanning || debug_verify_active)
         return false;
     // IDF may free the card before returning a VFS unregister error. Never
     // retain that pointer, or resume ordinary I/O after a partial unmount.
@@ -480,7 +642,7 @@ void InitializeLichuangMusicTools(bool refresh_immediately) {
         [](const PropertyList& p) -> ToolResult {
             std::lock_guard<std::mutex> lock(card_mutex);
             auto path = p["path"].value<std::string>();
-            if (storage_pending || !ready || !TfMusic::ValidPath(path) ||
+            if (storage_pending || debug_verify_active || !ready || !TfMusic::ValidPath(path) ||
                 std::find_if(library.begin(), library.end(), [&](const auto& item) {
                     return item.view() == path;
                 }) == library.end())

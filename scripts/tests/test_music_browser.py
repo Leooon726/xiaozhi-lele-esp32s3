@@ -24,7 +24,7 @@ class MusicBrowserTests(unittest.TestCase):
 std::mutex card_mutex;
 TfMusic::MusicPaths library;
 uint32_t library_revision=1;
-bool ready=false,scanning=true,library_truncated=false,storage_pending=false;
+bool ready=false,scanning=true,library_truncated=false,storage_pending=false,debug_verify_active=false;
 std::string index_error;
 class Application {
 public:
@@ -56,7 +56,9 @@ int main() {
     ready=true;storage_pending=true;
     assert(GetLichuangMusicPage(0).blocked);
     assert(!RequestLichuangMusicPath(selected));
-    storage_pending=false;
+    storage_pending=false;debug_verify_active=true;
+    assert(GetLichuangMusicPage(0).blocked && !RequestLichuangMusicPath(selected));
+    debug_verify_active=false;
 
     // Scanner publishes a different index: old row zero must never play the new row zero.
     TfMusic::MusicPaths replacement;

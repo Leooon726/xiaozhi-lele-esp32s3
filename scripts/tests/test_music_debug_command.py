@@ -24,11 +24,15 @@ int main() {
     for (unsigned i = 0; i < 1024; ++i) {
         auto c = ParseDebugCommand("music-test play " + std::to_string(i));
         assert(c.action == DebugAction::Play && c.index == i);
+        c = ParseDebugCommand("music-test verify " + std::to_string(i));
+        assert(c.action == DebugAction::Verify && c.index == i);
     }
     for (auto s : {"", "play 0", "music-test play", "music-test play ",
                    "music-test play -1", "music-test play +1", "music-test play 1024",
                    "music-test play 4294967296", "music-test play 1 trailing",
                    "music-test play /sdcard/a.mp3", "music-test stop now",
+                   "music-test verify", "music-test verify -1", "music-test verify 1024",
+                   "music-test verify /sdcard/a.mp3", "music-test verify 1 trailing",
                    "music-test refresh", "music-test status\n", "music-test play 1;reboot"})
         assert(ParseDebugCommand(s).action == DebugAction::Invalid);
 }

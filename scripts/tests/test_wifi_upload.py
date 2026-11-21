@@ -163,7 +163,7 @@ int main() {
 #include <cassert>
 #include <mutex>
 std::mutex card_mutex;
-bool storage_pending=false,scanning=false;
+bool storage_pending=false,scanning=false,debug_verify_active=false;
 bool ready=true;
 unsigned library_revision=1;
 void* card=nullptr;
@@ -179,7 +179,9 @@ int main() {
     assert(storage_pending && scans==0);
     scanning=false;
     assert(!IsLichuangStorageReadyForUpload());
-    card=&scans;assert(IsLichuangStorageReadyForUpload());
+    card=&scans;debug_verify_active=true;
+    assert(!IsLichuangStorageReadyForUpload() && !FinishLichuangStorageUpload() && storage_pending);
+    debug_verify_active=false;assert(IsLichuangStorageReadyForUpload());
     assert(FinishLichuangStorageUpload() && !storage_pending && scans==1);
     assert(!ready && library_revision==2);
     assert(!IsLichuangStorageReadyForUpload() && !FinishLichuangStorageUpload());
